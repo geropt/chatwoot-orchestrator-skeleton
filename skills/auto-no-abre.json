@@ -1,0 +1,29 @@
+{
+  "id": "auto_no_abre",
+  "title": "El auto no abre",
+  "patterns": [
+    "no abre el auto",
+    "no puedo abrir el auto",
+    "el auto no destraba",
+    "no abren las puertas",
+    "la puerta no abre",
+    "puerta trabada",
+    "no abre la puerta",
+    "puertas no abren",
+    "no se abre la reserva",
+    "el vehiculo no abre",
+    "la app no abre el auto"
+  ],
+  "guidance": [
+    "Pedir que cierre y vuelva a abrir la app",
+    "Preguntar si tiene senal de telefono en ese momento",
+    "Indicar que espere 2 minutos e intente nuevamente",
+    "Si sigue igual, derivar a operador"
+  ],
+  "constraints": [
+    "No prometer que se resolvera en un tiempo exacto",
+    "Mantener instrucciones breves y secuenciales",
+    "Si no abre tras los pasos, priorizar handoff"
+  ],
+  "ask_email": true
+}

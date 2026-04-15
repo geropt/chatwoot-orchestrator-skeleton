@@ -1,0 +1,24 @@
+{
+  "id": "problema_administrativo_ticket",
+  "title": "Problema administrativo",
+  "patterns": [
+    "problema administrativo",
+    "me cobraron mal",
+    "error de facturacion",
+    "quiero reclamar un cobro",
+    "no coincide el cargo",
+    "tema administrativo"
+  ],
+  "guidance": [
+    "Pedir que describa el tema administrativo en pocas lineas",
+    "Pedir email para ubicar la cuenta o reserva",
+    "Confirmar que se generara un ticket para seguimiento",
+    "Indicar que un operador retomara con el detalle"
+  ],
+  "constraints": [
+    "No prometer reembolsos automaticos",
+    "No confirmar resolucion sin revision humana",
+    "Siempre dejar trazabilidad para ticket y handoff"
+  ],
+  "ask_email": true
+}

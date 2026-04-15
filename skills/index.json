@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "auto_no_abre",
+      "file": "auto-no-abre.json",
+      "enabled": true
+    },
+    {
+      "id": "reporte_danios_fotos",
+      "file": "reporte-danios-fotos.json",
+      "enabled": true
+    },
+    {
+      "id": "problema_administrativo_ticket",
+      "file": "problema-administrativo-ticket.json",
+      "enabled": true
+    }
+  ]
+}

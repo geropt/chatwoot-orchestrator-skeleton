@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prueba Chatwoot</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 40rem;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+      color: #222;
+    }
+    .warn {
+      background: #fff3cd;
+      border: 1px solid #e6c200;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .warn code {
+      display: block;
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #fff;
+      border-radius: 4px;
+      font-size: 0.9em;
+      overflow-x: auto;
+    }
+    .muted { color: #555; font-size: 0.95rem; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>Prueba del widget Chatwoot</h1>
+
+  <div id="file-protocol-warning" class="warn" hidden>
+    <strong>No abras esta página con file://</strong>
+    <p>El widget usa un iframe hacia Chatwoot; con <code>file://</code> el navegador bloquea ese entorno y verás errores de “Unsafe attempt to load URL”.</p>
+    <p>Serví la carpeta por HTTP y abrí la misma ruta en <code>http://localhost:…</code>:</p>
+    <code>cd la-carpeta-del-proyecto && python3 -m http.server 8765</code>
+    <p class="muted">Luego: <code>http://localhost:8765/chatwoot-test.html</code></p>
+    <p class="muted">En Chatwoot: canal del sitio → dominios permitidos → incluir <code>localhost</code> (y el puerto si aplica).</p>
+  </div>
+
+  <p id="ok-hint">Si el SDK carga bien, deberías ver la burbuja de chat (normalmente abajo a la derecha).</p>
+  <p id="rate-limit-hint" class="muted" hidden>Si en la consola ves <strong>429</strong>, el servidor Chatwoot está limitando peticiones: esperá unos minutos, probá otra red/VPN o revisá límites en el servidor.</p>
+
+  <script>
+    (function () {
+      var isFile = location.protocol === 'file:';
+      if (isFile) {
+        document.getElementById('file-protocol-warning').hidden = false;
+        document.getElementById('ok-hint').hidden = true;
+        return;
+      }
+
+      document.getElementById('rate-limit-hint').hidden = false;
+
+      (function(d,t) {
+        var BASE_URL="https://chatwoot.mubee-platform.com";
+        var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+        g.src=BASE_URL+"/packs/js/sdk.js";
+        g.async = true;
+        s.parentNode.insertBefore(g,s);
+        g.onload=function(){
+          window.chatwootSDK.run({
+            websiteToken: 'mehgaixsW6BnukzvKAG35zz6',
+            baseUrl: BASE_URL
+          })
+        }
+      })(document,"script");
+    })();
+  </script>
+</body>
+</html>
