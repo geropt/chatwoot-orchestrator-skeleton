@@ -1,4 +1,5 @@
 type ToggleStatus = "open" | "resolved" | "pending" | "snoozed";
+type Priority = "urgent" | "high" | "medium" | "low" | null;
 
 export class ChatwootClient {
   constructor(
@@ -33,6 +34,16 @@ export class ChatwootClient {
     await this.request(`/conversations/${conversationId}/toggle_status`, {
       method: "POST",
       body: JSON.stringify({ status })
+    });
+  }
+
+  async togglePriority(
+    conversationId: number,
+    priority: Priority
+  ): Promise<void> {
+    await this.request(`/conversations/${conversationId}/toggle_priority`, {
+      method: "POST",
+      body: JSON.stringify({ priority })
     });
   }
 

@@ -7,14 +7,11 @@ export type AppConfig = {
   chatwootWebhookSecret: string;
   skipSignatureVerification: boolean;
   skillsDir: string;
-  skillsMinScore: number;
-  enableAiSkillMatching: boolean;
-  aiSkillMinConfidence: number;
-  aiSkillMaxCandidates: number;
-  enableAiSkillResponse: boolean;
-  aiSkillResponseMaxChars: number;
-  enableAiFaqConfirmation: boolean;
-  aiFaqMinConfidence: number;
+  agentEnabled: boolean;
+  agentTemperature: number;
+  agentMaxTokens: number;
+  agentHistoryLimit: number;
+  agentMaxRetries: number;
   openrouterBaseUrl: string;
   openrouterApiKey: string;
   openrouterModel: string;
@@ -125,27 +122,14 @@ const chatwootWebhookSecret = skipSignatureVerification
 const openrouterApiKeyOptional = optional("OPENROUTER_API_KEY");
 const openrouterAvailable = Boolean(openrouterApiKeyOptional);
 
-const enableAiSkillMatching = booleanEnvAuto(
-  "ENABLE_AI_SKILL_MATCHING",
-  openrouterAvailable
-);
-const enableAiSkillResponse = booleanEnvAuto(
-  "ENABLE_AI_SKILL_RESPONSE",
-  openrouterAvailable
-);
-const enableAiFaqConfirmation = booleanEnvAuto(
-  "ENABLE_AI_FAQ_CONFIRMATION",
-  openrouterAvailable
-);
+const agentEnabled = booleanEnvAuto("ENABLE_AGENT", openrouterAvailable);
 const businessHoursEnabled = booleanEnv("BUSINESS_HOURS_ENABLED", false);
-const requiresOpenrouter =
-  enableAiSkillMatching || enableAiSkillResponse || enableAiFaqConfirmation;
 
-const openrouterApiKey = requiresOpenrouter
+const openrouterApiKey = agentEnabled
   ? required("OPENROUTER_API_KEY")
   : openrouterApiKeyOptional;
 
-const openrouterModel = requiresOpenrouter
+const openrouterModel = agentEnabled
   ? required("OPENROUTER_MODEL")
   : optional("OPENROUTER_MODEL") || "openai/gpt-4o-mini";
 
@@ -158,19 +142,16 @@ export const config: AppConfig = {
   chatwootWebhookSecret,
   skipSignatureVerification,
   skillsDir: optional("SKILLS_DIR") || "./skills",
-  skillsMinScore: numberEnv("SKILLS_MIN_SCORE", 0.45),
-  enableAiSkillMatching,
-  aiSkillMinConfidence: numberEnv("AI_SKILL_MIN_CONFIDENCE", 0.65),
-  aiSkillMaxCandidates: numberEnv("AI_SKILL_MAX_CANDIDATES", 20),
-  enableAiSkillResponse,
-  aiSkillResponseMaxChars: numberEnv("AI_SKILL_RESPONSE_MAX_CHARS", 420),
-  enableAiFaqConfirmation,
-  aiFaqMinConfidence: numberEnv("AI_FAQ_MIN_CONFIDENCE", 0.7),
+  agentEnabled,
+  agentTemperature: numberEnv("AGENT_TEMPERATURE", 0.3),
+  agentMaxTokens: numberEnv("AGENT_MAX_TOKENS", 320),
+  agentHistoryLimit: numberEnv("AGENT_HISTORY_LIMIT", 12),
+  agentMaxRetries: numberEnv("AGENT_MAX_RETRIES", 2),
   openrouterBaseUrl:
     optional("OPENROUTER_BASE_URL") || "https://openrouter.ai/api/v1",
   openrouterApiKey,
   openrouterModel,
-  openrouterTimeoutMs: numberEnv("OPENROUTER_TIMEOUT_MS", 6000),
+  openrouterTimeoutMs: numberEnv("OPENROUTER_TIMEOUT_MS", 8000),
   businessHoursEnabled,
   businessTimezone: timezoneEnv(
     "BUSINESS_TIMEZONE",

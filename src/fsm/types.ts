@@ -1,65 +1,68 @@
 export type ConversationStateName =
   | "cold_start"
-  | "handoff_active"
+  | "awaiting_category"
+  | "agent_active"
   | "awaiting_email"
-  | "awaiting_problem"
-  | "awaiting_faq_confirmation";
+  | "handoff_active";
+
+export type ConversationCategory = "tecnico" | "administrativo" | "general";
+
+export type ConversationPriority = "urgent" | "high" | "medium" | "low";
+
+export type ConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 export type ConversationState = {
   state: ConversationStateName;
   unknownAttempts: number;
-  isUser: boolean | null;
   email: string | null;
   problem: string | null;
   matchedSkillId: string | null;
+  category: ConversationCategory | null;
+  history: ConversationTurn[];
   updatedAt: number;
 };
 
 export type UserSignal =
   | "handoff"
+  | "goodbye"
   | "yes"
   | "no"
   | "email"
+  | "category"
   | "text"
   | "unknown";
 
 export type TemplateKey =
-  | "WELCOME_OPEN"
-  | "ASK_EMAIL_FOR_CASE"
+  | "WELCOME_TRIAGE"
+  | "ASK_CATEGORY_RETRY"
   | "ASK_EMAIL"
   | "ASK_EMAIL_RETRY"
-  | "ASK_PROBLEM"
-  | "ASK_PROBLEM_NO_EMAIL"
-  | "ASK_PROBLEM_RETRY"
-  | "FAQ_HELPED"
-  | "FAQ_CONFIRM_RETRY"
-  | "HANDOFF_HUMAN";
+  | "FAREWELL"
+  | "HANDOFF_HUMAN"
+  | "GENERAL_HANDOFF"
+  | "OUT_OF_HOURS_HANDOFF";
 
 export type ParsedInput = {
   signal: UserSignal;
   email: string | null;
+  category: ConversationCategory | null;
 };
 
 export type FsmDecision = {
   action: "reply" | "handoff";
-  replyKey: TemplateKey;
+  replyKey: TemplateKey | null;
   replyText: string | null;
   nextState: ConversationStateName;
   unknownAttempts: number;
   signal: UserSignal;
-  isUser: boolean | null;
   email: string | null;
   problem: string | null;
   matchedSkillId: string | null;
+  category: ConversationCategory | null;
   addAgentNote: boolean;
-};
-
-export type SkillMatch = {
-  id: string;
-  title: string;
-  response: string;
-  guidance: string[];
-  patterns: string[];
-  askEmail: boolean;
-  score: number;
+  agentSummary: string | null;
+  priority: ConversationPriority | null;
 };

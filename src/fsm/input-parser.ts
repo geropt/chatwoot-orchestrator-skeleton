@@ -1,4 +1,4 @@
-import type { ParsedInput } from "./types.js";
+import type { ConversationCategory, ParsedInput } from "./types.js";
 
 const EMAIL_REGEX = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 
@@ -8,7 +8,16 @@ export function parseInput(content: string): ParsedInput {
   if (isHandoffRequest(normalized)) {
     return {
       signal: "handoff",
-      email: extractEmail(content)
+      email: extractEmail(content),
+      category: null
+    };
+  }
+
+  if (isGoodbye(normalized)) {
+    return {
+      signal: "goodbye",
+      email: null,
+      category: null
     };
   }
 
@@ -16,35 +25,33 @@ export function parseInput(content: string): ParsedInput {
   if (email) {
     return {
       signal: "email",
-      email
+      email,
+      category: null
+    };
+  }
+
+  const category = detectCategory(normalized);
+  if (category) {
+    return {
+      signal: "category",
+      email: null,
+      category
     };
   }
 
   if (isYes(normalized)) {
-    return {
-      signal: "yes",
-      email: null
-    };
+    return { signal: "yes", email: null, category: null };
   }
 
   if (isNo(normalized)) {
-    return {
-      signal: "no",
-      email: null
-    };
+    return { signal: "no", email: null, category: null };
   }
 
   if (normalized.length > 0) {
-    return {
-      signal: "text",
-      email: null
-    };
+    return { signal: "text", email: null, category: null };
   }
 
-  return {
-    signal: "unknown",
-    email: null
-  };
+  return { signal: "unknown", email: null, category: null };
 }
 
 function normalize(value: string): string {
@@ -60,72 +67,76 @@ function extractEmail(value: string): string | null {
   if (!match) {
     return null;
   }
-
   return match[0].toLowerCase();
 }
 
 function isYes(value: string): boolean {
-  return [
-    /^(si|s|yes|y)$/,
-    /^si\b/,
-    /\bsoy cliente\b/,
-    /\bsoy usuario\b/,
-    /^cliente$/
-  ].some(pattern => pattern.test(value));
+  return [/^(si|s|yes|y|ok|dale)$/, /^si\b/].some(pattern => pattern.test(value));
 }
 
 function isNo(value: string): boolean {
-  return [
-    /^(no|n)$/,
-    /^no\b/,
-    /\bno soy usuario\b/,
-    /\bno soy cliente\b/,
-    /\bte dije que no\b/,
-    /\bno quiero\b/,
-    /\bprefiero no\b/,
-    /\bsin mail\b/
-  ].some(pattern => pattern.test(value));
+  return [/^(no|n)$/, /^no\b/, /\bno quiero\b/, /\bprefiero no\b/].some(pattern =>
+    pattern.test(value)
+  );
 }
 
 function isHandoffRequest(value: string): boolean {
-  return /\b(humano|agente|asesor|persona|operador|representante)\b/.test(value);
+  return /\b(humano|agente|asesor|persona|operador|representante|hablar con alguien)\b/.test(
+    value
+  );
+}
+
+function isGoodbye(value: string): boolean {
+  return [
+    /^(chau|chao|adios|bye|listo|gracias)\s*(chau|chao|adios|bye)?\s*$/,
+    /\b(hasta luego|hasta la proxima|me despido|nos vemos)\b/
+  ].some(pattern => pattern.test(value));
 }
 
 export function isMeaningfulProblemText(content: string): boolean {
-  return content.trim().length >= 8;
+  return content.trim().length >= 4;
 }
 
-export function detectAffirmation(content: string): "yes" | "no" | null {
-  const normalized = normalize(content);
+export function detectCategory(normalized: string): ConversationCategory | null {
   if (!normalized) {
     return null;
   }
 
-  if (isStrongYes(normalized)) {
-    return "yes";
+  if (/^1\)?$/.test(normalized) || /^opcion\s*1$/.test(normalized)) {
+    return "tecnico";
+  }
+  if (/^2\)?$/.test(normalized) || /^opcion\s*2$/.test(normalized)) {
+    return "administrativo";
+  }
+  if (/^3\)?$/.test(normalized) || /^opcion\s*3$/.test(normalized)) {
+    return "general";
   }
 
-  if (isStrongNo(normalized)) {
-    return "no";
+  if (isShortCategoryAnswer(normalized)) {
+    if (matchesTecnico(normalized)) return "tecnico";
+    if (matchesAdministrativo(normalized)) return "administrativo";
+    if (matchesGeneral(normalized)) return "general";
   }
 
   return null;
 }
 
-function isStrongYes(value: string): boolean {
-  return [
-    /\b(si|yes|ok|dale)\b/,
-    /\b(funciono|sirvio|resuelto|solucionado)\b/,
-    /\b(ya esta|ya quedo|quedo andando)\b/
-  ].some(pattern => pattern.test(value));
+function isShortCategoryAnswer(value: string): boolean {
+  return value.split(/\s+/).filter(Boolean).length <= 3;
 }
 
-function isStrongNo(value: string): boolean {
-  return [
-    /^no$/, 
-    /\b(no funciona|no funciono|no sirvio|sigue igual)\b/,
-    /\b(no abre|no anda|no responde|no arranca)\b/,
-    /\b(probe de todo pero no)\b/,
-    /\b(no pude|sin cambios)\b/
-  ].some(pattern => pattern.test(value));
+function matchesTecnico(value: string): boolean {
+  return /\b(tecnico|tec|soporte)\b/.test(value);
+}
+
+function matchesAdministrativo(value: string): boolean {
+  return /\b(administrativo|admin|cobro|cobros|factura|facturacion|pago|pagos|cuenta|cuentas)\b/.test(
+    value
+  );
+}
+
+function matchesGeneral(value: string): boolean {
+  return /\b(consulta|consultas|general|pregunta|preguntas|info|informacion|duda|dudas|otra)\b/.test(
+    value
+  );
 }

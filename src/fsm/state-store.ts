@@ -3,10 +3,11 @@ import type { ConversationState } from "./types.js";
 const DEFAULT_STATE: ConversationState = {
   state: "cold_start",
   unknownAttempts: 0,
-  isUser: null,
   email: null,
   problem: null,
   matchedSkillId: null,
+  category: null,
+  history: [],
   updatedAt: Date.now()
 };
 
@@ -16,7 +17,7 @@ export class ConversationStateStore {
   get(conversationId: number): ConversationState {
     const state = this.store.get(conversationId);
     if (!state) {
-      return { ...DEFAULT_STATE, updatedAt: Date.now() };
+      return { ...DEFAULT_STATE, history: [], updatedAt: Date.now() };
     }
     return state;
   }

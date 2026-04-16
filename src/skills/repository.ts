@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { LoadedSkill, SkillDocument, SkillIndex } from "./types.js";
+import { parseSkillMarkdown } from "./parser.js";
+import type { LoadedSkill, SkillIndex } from "./types.js";
 
 export function loadSkills(skillsDir: string): LoadedSkill[] {
   const indexPath = path.resolve(skillsDir, "index.json");
@@ -17,70 +18,28 @@ export function loadSkills(skillsDir: string): LoadedSkill[] {
   const loaded: LoadedSkill[] = [];
 
   for (const entry of indexJson.skills) {
-    if (!entry?.id || !entry?.file) {
-      continue;
-    }
-
-    if (entry.enabled === false) {
-      continue;
-    }
+    if (!entry?.id || !entry?.file) continue;
+    if (entry.enabled === false) continue;
 
     const filePath = path.resolve(skillsDir, entry.file);
-    if (!fs.existsSync(filePath)) {
-      continue;
-    }
+    if (!fs.existsSync(filePath)) continue;
 
-    const skillRaw = fs.readFileSync(filePath, "utf8");
-    const skill = JSON.parse(skillRaw) as SkillDocument;
-
-    if (!skill.id || !skill.title || !Array.isArray(skill.patterns)) {
-      continue;
-    }
-
-    const guidance = normalizeStringArray(skill.guidance);
-    const constraints = normalizeStringArray(skill.constraints);
-    const response =
-      typeof skill.response === "string" && skill.response.trim()
-        ? skill.response.trim()
-        : buildFallbackResponse(guidance);
-
-    if (!response) {
-      continue;
-    }
+    const raw = fs.readFileSync(filePath, "utf8");
+    const skill = parseSkillMarkdown(raw, entry.file);
 
     loaded.push({
       id: skill.id,
       title: skill.title,
-      response,
-      patterns: skill.patterns,
-      guidance,
-      constraints,
-      askEmail: Boolean(skill.ask_email)
+      description: skill.description ?? "",
+      category: skill.category ?? null,
+      askEmail: Boolean(skill.ask_email),
+      triggers: skill.triggers ?? [],
+      diagnosticQuestions: skill.diagnostic_questions ?? [],
+      steps: skill.steps ?? [],
+      escalateWhen: skill.escalate_when ?? [],
+      constraints: skill.constraints ?? []
     });
   }
 
   return loaded;
-}
-
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map(item => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
-}
-
-function buildFallbackResponse(guidance: string[]): string {
-  if (!guidance.length) {
-    return "";
-  }
-
-  const steps = guidance
-    .slice(0, 4)
-    .map((item, index) => `${index + 1}) ${item}`)
-    .join(" ");
-
-  return `Entiendo. Te propongo probar esto: ${steps}`;
 }

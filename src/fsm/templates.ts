@@ -1,24 +1,22 @@
 import type { TemplateKey } from "./types.js";
 
 const TEMPLATES: Record<TemplateKey, string> = {
-  WELCOME_OPEN: "Hola, gracias por escribirnos. Contame en que te podemos ayudar.",
-  ASK_EMAIL_FOR_CASE:
-    "Para ubicar mejor tu caso, compartime un mail de contacto. Si no queres compartirlo, seguimos igual.",
+  WELCOME_TRIAGE:
+    "¡Hola! Soy el asistente de MyKeego. Para ubicarte rápido, decime de qué se trata:\n\n1) Técnico (app, auto o reserva en curso)\n2) Administrativo (cobros, cuenta, documentación)\n3) Otra consulta\n\nRespondé con el número o contame directamente qué necesitás.",
+  ASK_CATEGORY_RETRY:
+    "Para orientarte mejor, ¿es un tema técnico, administrativo u otra consulta? También podés contarme qué te pasa y yo lo clasifico.",
   ASK_EMAIL:
-    "Perfecto. Pasame tu mail de contacto y seguimos con tu caso.",
+    "Compartime tu email de contacto así dejo el caso vinculado a tu cuenta.",
   ASK_EMAIL_RETRY:
-    "No pude detectar un mail valido. Si queres enviarlo, compartilo en formato nombre@dominio.com. Si no, seguimos igual.",
-  ASK_PROBLEM:
-    "Gracias. Ahora contame brevemente en que te podemos ayudar mientras contactamos a un operador.",
-  ASK_PROBLEM_NO_EMAIL:
-    "Perfecto, seguimos sin mail. Contame brevemente en que te podemos ayudar y te ayudo a derivarlo.",
-  ASK_PROBLEM_RETRY:
-    "Necesito una breve descripcion de tu consulta para pasarsela al operador.",
-  FAQ_HELPED:
-    "¿Esto te ayudo a resolverlo? Responde si o no para seguir.",
-  FAQ_CONFIRM_RETRY:
-    "Para cerrar este paso, responde si o no. Si queres, tambien te puedo derivar con una persona.",
-  HANDOFF_HUMAN: "Te paso con un agente humano para ayudarte mejor."
+    "No pude leer un email válido. Mandámelo con formato nombre@dominio.com.",
+  FAREWELL:
+    "Perfecto, cualquier cosa escribinos y seguimos. ¡Buen día!",
+  HANDOFF_HUMAN:
+    "Te conecto con un operador para que siga con tu caso.",
+  GENERAL_HANDOFF:
+    "Te derivo con un operador para que atienda tu consulta.",
+  OUT_OF_HOURS_HANDOFF:
+    "Ahora estamos fuera de horario de atención. Dejé tu caso en cola y un operador te responde apenas vuelva el equipo."
 };
 
 export function renderTemplate(key: TemplateKey): string {

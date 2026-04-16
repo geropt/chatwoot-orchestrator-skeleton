@@ -1,20 +1,18 @@
 import type { AppConfig } from "../config.js";
-import { decideNextStep } from "../fsm/engine.js";
+import type { AgentAction } from "../agent/conversational-agent.js";
+import { runAgentTurn } from "../agent/conversational-agent.js";
+import {
+  buildFarewellDecision,
+  buildHandoffDecision,
+  buildReplyDecision
+} from "../fsm/engine.js";
 import { isMeaningfulProblemText, parseInput } from "../fsm/input-parser.js";
 import type {
+  ConversationCategory,
   ConversationState,
   FsmDecision,
-  ParsedInput,
-  SkillMatch,
-  UserSignal
+  ParsedInput
 } from "../fsm/types.js";
-import {
-  classifyFaqConfirmationWithAi,
-  type FaqConfirmationLabel
-} from "./ai-faq-classifier.js";
-import { buildSkillResponseWithAi } from "../skills/ai-responder.js";
-import { matchSkill, rankSkills } from "../skills/matcher.js";
-import { selectSkillWithAi } from "../skills/ai-matcher.js";
 import type { LoadedSkill } from "../skills/types.js";
 
 export type OrchestratorInput = {
@@ -22,20 +20,28 @@ export type OrchestratorInput = {
   currentState: ConversationState;
 };
 
+export type OrchestratorSource =
+  | "cold_start"
+  | "category_set"
+  | "category_retry"
+  | "general_handoff"
+  | "agent_reply"
+  | "agent_ask_email"
+  | "agent_resolve"
+  | "agent_handoff"
+  | "agent_retry"
+  | "agent_fallback"
+  | "email_captured"
+  | "email_retry"
+  | "handoff_explicit"
+  | "farewell";
+
 export type OrchestratorTrace = {
-  source: "none" | "local" | "ai" | "state";
-  localSkillId: string | null;
-  localSkillScore: number | null;
-  selectedSkillId: string | null;
-  selectedSkillScore: number | null;
-  aiSkillId: string | null;
-  aiConfidence: number | null;
-  aiReason: string | null;
-  aiSkillResponseUsed: boolean;
-  aiFaqLabel: FaqConfirmationLabel | null;
-  aiFaqConfidence: number | null;
-  aiFaqReason: string | null;
-  topCandidates: Array<{ id: string; score: number }>;
+  source: OrchestratorSource;
+  agentAction: AgentAction["kind"] | null;
+  agentError: string | null;
+  matchedSkillId: string | null;
+  category: ConversationCategory | null;
 };
 
 export type OrchestratorResult = {
@@ -50,256 +56,453 @@ export class ConversationOrchestrator {
   ) {}
 
   async run(input: OrchestratorInput): Promise<OrchestratorResult> {
-    let parsedInput = parseInput(input.content);
-    const faqSelection = await this.classifyFaqConfirmation(input, parsedInput);
-    if (faqSelection.overrideSignal) {
-      parsedInput = {
-        ...parsedInput,
-        signal: faqSelection.overrideSignal
-      };
-    }
+    const parsed = parseInput(input.content);
 
-    const skillSelection = await this.selectSkill(input);
-    const enrichedSkillSelection = await this.enrichSkillResponse(input, skillSelection);
-    const decision = decideNextStep(
-      input.currentState,
-      parsedInput,
-      input.content,
-      enrichedSkillSelection.skill
-    );
-
-    return {
-      decision,
-      trace: {
-        ...enrichedSkillSelection.trace,
-        aiFaqLabel: faqSelection.label,
-        aiFaqConfidence: faqSelection.confidence,
-        aiFaqReason: faqSelection.reason
-      }
-    };
-  }
-
-  private async enrichSkillResponse(
-    input: OrchestratorInput,
-    selection: { skill: SkillMatch | null; trace: OrchestratorTrace }
-  ): Promise<{ skill: SkillMatch | null; trace: OrchestratorTrace }> {
-    if (!selection.skill || !this.config.enableAiSkillResponse) {
-      return selection;
-    }
-
-    const loadedSkill = this.skills.find(skill => skill.id === selection.skill?.id);
-    if (!loadedSkill) {
-      return selection;
-    }
-
-    const aiResponse = await buildSkillResponseWithAi({
-      query: input.content,
-      skill: loadedSkill,
-      config: this.config
-    });
-
-    if (!aiResponse) {
-      return selection;
-    }
-
-    return {
-      skill: {
-        ...selection.skill,
-        response: aiResponse
-      },
-      trace: {
-        ...selection.trace,
-        aiSkillResponseUsed: true
-      }
-    };
-  }
-
-  private async classifyFaqConfirmation(
-    input: OrchestratorInput,
-    parsedInput: ParsedInput
-  ): Promise<{
-    overrideSignal: UserSignal | null;
-    label: FaqConfirmationLabel | null;
-    confidence: number | null;
-    reason: string | null;
-  }> {
-    if (
-      input.currentState.state !== "awaiting_faq_confirmation" ||
-      !this.config.enableAiFaqConfirmation ||
-      parsedInput.signal === "yes" ||
-      parsedInput.signal === "no"
-    ) {
+    if (parsed.signal === "handoff") {
       return {
-        overrideSignal: null,
-        label: null,
-        confidence: null,
-        reason: null
+        decision: buildHandoffDecision({
+          currentState: input.currentState,
+          signal: "handoff",
+          replyKey: "HANDOFF_HUMAN",
+          replyText: null,
+          problem: input.currentState.problem ?? input.content.trim(),
+          addAgentNote: true
+        }),
+        trace: baseTrace("handoff_explicit", input.currentState)
       };
     }
 
-    const aiResult = await classifyFaqConfirmationWithAi({
-      content: input.content,
-      config: this.config
-    });
-
-    if (!aiResult) {
+    if (parsed.signal === "goodbye") {
       return {
-        overrideSignal: null,
-        label: null,
-        confidence: null,
-        reason: null
+        decision: buildFarewellDecision(input.currentState),
+        trace: baseTrace("farewell", input.currentState)
       };
     }
 
-    const overrideSignal =
-      aiResult.confidence >= this.config.aiFaqMinConfidence &&
-      (aiResult.label === "yes" || aiResult.label === "no")
-        ? aiResult.label
-        : null;
-
-    return {
-      overrideSignal,
-      label: aiResult.label,
-      confidence: aiResult.confidence,
-      reason: aiResult.reason
-    };
-  }
-
-  private async selectSkill(input: OrchestratorInput): Promise<{
-    skill: SkillMatch | null;
-    trace: OrchestratorTrace;
-  }> {
-    if (input.currentState.matchedSkillId) {
-      const stateSkill = this.skills.find(skill => skill.id === input.currentState.matchedSkillId);
-      if (stateSkill) {
+    switch (input.currentState.state) {
+      case "cold_start":
+        return this.handleColdStart(input, parsed);
+      case "awaiting_category":
+        return this.handleAwaitingCategory(input, parsed);
+      case "agent_active":
+        return this.handleAgentActive(input, parsed);
+      case "awaiting_email":
+        return this.handleAwaitingEmail(input, parsed);
+      default:
         return {
-          skill: {
-            id: stateSkill.id,
-            title: stateSkill.title,
-            response: stateSkill.response,
-            guidance: stateSkill.guidance,
-            patterns: stateSkill.patterns,
-            askEmail: stateSkill.askEmail,
-            score: 1
-          },
-          trace: {
-            ...emptyTrace(),
-            source: "state",
-            selectedSkillId: stateSkill.id,
-            selectedSkillScore: 1
-          }
+          decision: buildHandoffDecision({
+            currentState: input.currentState,
+            signal: parsed.signal,
+            replyKey: "HANDOFF_HUMAN",
+            replyText: null,
+            problem: input.currentState.problem ?? input.content.trim(),
+            addAgentNote: true
+          }),
+          trace: baseTrace("handoff_explicit", input.currentState)
         };
-      }
     }
+  }
 
-    const canEvaluateSkill =
-      input.currentState.state === "awaiting_problem" ||
-      input.currentState.state === "cold_start" ||
-      input.currentState.state === "awaiting_email";
+  private handleColdStart(
+    input: OrchestratorInput,
+    parsed: ParsedInput
+  ): OrchestratorResult {
+    const email = parsed.email ?? input.currentState.email;
+    return {
+      decision: buildReplyDecision({
+        currentState: input.currentState,
+        replyKey: "WELCOME_TRIAGE",
+        replyText: null,
+        nextState: "awaiting_category",
+        signal: parsed.signal,
+        unknownAttempts: 0,
+        email
+      }),
+      trace: baseTrace("cold_start", input.currentState)
+    };
+  }
 
-    if (!canEvaluateSkill || !isMeaningfulProblemText(input.content)) {
+  private async handleAwaitingCategory(
+    input: OrchestratorInput,
+    parsed: ParsedInput
+  ): Promise<OrchestratorResult> {
+    if (parsed.signal === "category" && parsed.category === "general") {
       return {
-        skill: null,
-        trace: emptyTrace()
+        decision: buildHandoffDecision({
+          currentState: input.currentState,
+          signal: parsed.signal,
+          replyKey: "GENERAL_HANDOFF",
+          replyText: null,
+          problem: input.currentState.problem ?? "consulta general",
+          category: "general",
+          addAgentNote: true
+        }),
+        trace: baseTrace("general_handoff", {
+          ...input.currentState,
+          category: "general"
+        })
       };
     }
 
-    const ranked = rankSkills(input.content, this.skills);
-    const rankedById = new Map(ranked.map(match => [match.id, match]));
-
-    const aiCandidates = this.skills
-      .map(skill => {
-        const rankedMatch = rankedById.get(skill.id);
-        if (rankedMatch) {
-          return rankedMatch;
+    if (parsed.signal === "category" && parsed.category) {
+      const category = parsed.category;
+      const followUp = categoryFollowUpText(category);
+      return {
+        decision: buildReplyDecision({
+          currentState: input.currentState,
+          replyKey: null,
+          replyText: followUp,
+          nextState: "agent_active",
+          signal: parsed.signal,
+          unknownAttempts: 0,
+          category
+        }),
+        trace: {
+          source: "category_set",
+          agentAction: null,
+          agentError: null,
+          matchedSkillId: null,
+          category
         }
+      };
+    }
 
-        return {
-          id: skill.id,
-          title: skill.title,
-          response: skill.response,
-          guidance: skill.guidance,
-          patterns: skill.patterns,
-          askEmail: skill.askEmail,
-          score: 0
-        } as SkillMatch;
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, this.config.aiSkillMaxCandidates);
+    if (parsed.signal === "email" && parsed.email) {
+      return {
+        decision: buildReplyDecision({
+          currentState: input.currentState,
+          replyKey: "ASK_CATEGORY_RETRY",
+          replyText: null,
+          nextState: "awaiting_category",
+          signal: parsed.signal,
+          unknownAttempts: input.currentState.unknownAttempts,
+          email: parsed.email
+        }),
+        trace: baseTrace("category_retry", input.currentState)
+      };
+    }
 
-    const localSkill = matchSkill(input.content, this.skills, this.config.skillsMinScore);
+    if (
+      (parsed.signal === "text" || parsed.signal === "yes" || parsed.signal === "no") &&
+      isMeaningfulProblemText(input.content)
+    ) {
+      const promoted: ConversationState = {
+        ...input.currentState,
+        state: "agent_active",
+        problem: input.currentState.problem ?? input.content.trim(),
+        category: null
+      };
+      return this.runAgentWithState(promoted, parsed, input.content);
+    }
 
-    let selectedSkill: SkillMatch | null = localSkill;
-    let source: OrchestratorTrace["source"] = localSkill ? "local" : "none";
-    let aiSkillId: string | null = null;
-    let aiConfidence: number | null = null;
-    let aiReason: string | null = null;
+    return this.buildUnknownRetry(input.currentState, parsed, {
+      nextState: "awaiting_category",
+      retryTemplate: "ASK_CATEGORY_RETRY",
+      source: "category_retry"
+    });
+  }
 
-    if (this.config.enableAiSkillMatching && aiCandidates.length > 0) {
-      const aiSelection = await selectSkillWithAi({
-        query: input.content,
-        candidates: aiCandidates,
-        config: this.config
+  private async handleAgentActive(
+    input: OrchestratorInput,
+    parsed: ParsedInput
+  ): Promise<OrchestratorResult> {
+    const nextState: ConversationState = {
+      ...input.currentState,
+      email: parsed.email ?? input.currentState.email,
+      problem: input.currentState.problem ?? input.content.trim()
+    };
+
+    return this.runAgentWithState(nextState, parsed, input.content);
+  }
+
+  private async handleAwaitingEmail(
+    input: OrchestratorInput,
+    parsed: ParsedInput
+  ): Promise<OrchestratorResult> {
+    if (parsed.signal === "email" && parsed.email) {
+      const updated: ConversationState = {
+        ...input.currentState,
+        state: "agent_active",
+        email: parsed.email
+      };
+      const agentResult = await this.runAgentWithState(updated, parsed, input.content);
+      return {
+        decision: agentResult.decision,
+        trace: { ...agentResult.trace, source: "email_captured" }
+      };
+    }
+
+    if (parsed.signal === "no") {
+      return {
+        decision: buildHandoffDecision({
+          currentState: input.currentState,
+          signal: parsed.signal,
+          replyKey: "HANDOFF_HUMAN",
+          replyText: null,
+          problem: input.currentState.problem,
+          addAgentNote: true
+        }),
+        trace: baseTrace("agent_handoff", input.currentState)
+      };
+    }
+
+    if (parsed.signal === "text" && isMeaningfulProblemText(input.content)) {
+      const updated: ConversationState = {
+        ...input.currentState,
+        state: "agent_active"
+      };
+      return this.runAgentWithState(updated, parsed, input.content);
+    }
+
+    return this.buildUnknownRetry(input.currentState, parsed, {
+      nextState: "awaiting_email",
+      retryTemplate: "ASK_EMAIL_RETRY",
+      source: "email_retry"
+    });
+  }
+
+  private async runAgentWithState(
+    state: ConversationState,
+    parsed: ParsedInput,
+    rawContent: string
+  ): Promise<OrchestratorResult> {
+    if (!this.config.agentEnabled) {
+      return {
+        decision: buildHandoffDecision({
+          currentState: state,
+          signal: parsed.signal,
+          replyKey: "HANDOFF_HUMAN",
+          replyText: null,
+          problem: state.problem ?? rawContent.trim(),
+          addAgentNote: true
+        }),
+        trace: {
+          ...baseTrace("agent_fallback", state),
+          agentError: "agent_disabled"
+        }
+      };
+    }
+
+    const agentResult = await runAgentTurn({
+      context: {
+        content: rawContent,
+        category: state.category,
+        email: state.email,
+        history: state.history,
+        state: state.state
+      },
+      skills: this.skills,
+      config: this.config
+    });
+
+    if (agentResult.action) {
+      return translateAgentAction({
+        action: agentResult.action,
+        state,
+        parsed,
+        rawContent
       });
+    }
 
-      if (aiSelection) {
-        aiSkillId = aiSelection.selectedSkillId;
-        aiConfidence = aiSelection.confidence;
-        aiReason = aiSelection.reason;
-
-        if (
-          aiSelection.selectedSkillId &&
-          aiSelection.confidence >= this.config.aiSkillMinConfidence
-        ) {
-          const aiSkill = aiCandidates.find(
-            candidate => candidate.id === aiSelection.selectedSkillId
-          );
-          if (aiSkill) {
-            selectedSkill = aiSkill;
-            source = "ai";
-          }
+    const nextUnknown = state.unknownAttempts + 1;
+    if (nextUnknown >= this.config.agentMaxRetries) {
+      return {
+        decision: buildHandoffDecision({
+          currentState: state,
+          signal: parsed.signal,
+          replyKey: "HANDOFF_HUMAN",
+          replyText: null,
+          problem: state.problem ?? rawContent.trim(),
+          addAgentNote: true,
+          agentSummary: agentResult.error
+            ? `Fallo del agente: ${agentResult.error}`
+            : null
+        }),
+        trace: {
+          ...baseTrace("agent_fallback", state),
+          agentError: agentResult.error
         }
-      }
+      };
     }
 
     return {
-      skill: selectedSkill,
+      decision: buildReplyDecision({
+        currentState: state,
+        replyKey: null,
+        replyText:
+          "Perdón, no te entendí bien. ¿Podés contarme un poco más sobre lo que te pasa?",
+        nextState: "agent_active",
+        signal: parsed.signal,
+        unknownAttempts: nextUnknown,
+        category: state.category,
+        problem: state.problem
+      }),
       trace: {
-        source,
-        localSkillId: localSkill?.id ?? null,
-        localSkillScore: localSkill?.score ?? null,
-        selectedSkillId: selectedSkill?.id ?? null,
-        selectedSkillScore: selectedSkill?.score ?? null,
-        aiSkillId,
-        aiConfidence,
-        aiReason,
-        aiSkillResponseUsed: false,
-        aiFaqLabel: null,
-        aiFaqConfidence: null,
-        aiFaqReason: null,
-        topCandidates: aiCandidates.map(candidate => ({
-          id: candidate.id,
-          score: candidate.score
-        }))
+        ...baseTrace("agent_retry", state),
+        agentError: agentResult.error
       }
+    };
+  }
+
+  private buildUnknownRetry(
+    currentState: ConversationState,
+    parsed: ParsedInput,
+    options: {
+      nextState: ConversationState["state"];
+      retryTemplate: "ASK_CATEGORY_RETRY" | "ASK_EMAIL_RETRY";
+      source: OrchestratorSource;
+    }
+  ): OrchestratorResult {
+    const nextUnknown = currentState.unknownAttempts + 1;
+    if (nextUnknown >= this.config.agentMaxRetries) {
+      return {
+        decision: buildHandoffDecision({
+          currentState,
+          signal: parsed.signal,
+          replyKey: "HANDOFF_HUMAN",
+          replyText: null,
+          problem: currentState.problem,
+          addAgentNote: true
+        }),
+        trace: baseTrace("agent_fallback", currentState)
+      };
+    }
+
+    return {
+      decision: buildReplyDecision({
+        currentState,
+        replyKey: options.retryTemplate,
+        replyText: null,
+        nextState: options.nextState,
+        signal: parsed.signal,
+        unknownAttempts: nextUnknown
+      }),
+      trace: baseTrace(options.source, currentState)
     };
   }
 }
 
-function emptyTrace(): OrchestratorTrace {
+function translateAgentAction(params: {
+  action: AgentAction;
+  state: ConversationState;
+  parsed: ParsedInput;
+  rawContent: string;
+}): OrchestratorResult {
+  const { action, state, parsed, rawContent } = params;
+  const matchedSkillId = action.matchedSkillId ?? state.matchedSkillId;
+  const problem = state.problem ?? rawContent.trim();
+
+  switch (action.kind) {
+    case "reply":
+      return {
+        decision: buildReplyDecision({
+          currentState: state,
+          replyKey: null,
+          replyText: action.text,
+          nextState: "agent_active",
+          signal: parsed.signal,
+          unknownAttempts: 0,
+          category: state.category,
+          problem,
+          matchedSkillId
+        }),
+        trace: {
+          source: "agent_reply",
+          agentAction: "reply",
+          agentError: null,
+          matchedSkillId,
+          category: state.category
+        }
+      };
+
+    case "ask_email":
+      return {
+        decision: buildReplyDecision({
+          currentState: state,
+          replyKey: null,
+          replyText: action.text,
+          nextState: "awaiting_email",
+          signal: parsed.signal,
+          unknownAttempts: 0,
+          category: state.category,
+          problem,
+          matchedSkillId
+        }),
+        trace: {
+          source: "agent_ask_email",
+          agentAction: "ask_email",
+          agentError: null,
+          matchedSkillId,
+          category: state.category
+        }
+      };
+
+    case "resolve":
+      return {
+        decision: buildReplyDecision({
+          currentState: state,
+          replyKey: null,
+          replyText: action.text,
+          nextState: "cold_start",
+          signal: parsed.signal,
+          unknownAttempts: 0,
+          category: null,
+          problem: null,
+          matchedSkillId: null
+        }),
+        trace: {
+          source: "agent_resolve",
+          agentAction: "resolve",
+          agentError: null,
+          matchedSkillId,
+          category: state.category
+        }
+      };
+
+    case "handoff":
+      return {
+        decision: buildHandoffDecision({
+          currentState: state,
+          signal: parsed.signal,
+          replyKey: "HANDOFF_HUMAN",
+          replyText: action.text,
+          problem,
+          matchedSkillId,
+          category: state.category,
+          addAgentNote: true,
+          agentSummary: action.summary,
+          priority: action.priority
+        }),
+        trace: {
+          source: "agent_handoff",
+          agentAction: "handoff",
+          agentError: null,
+          matchedSkillId,
+          category: state.category
+        }
+      };
+  }
+}
+
+function categoryFollowUpText(category: ConversationCategory): string {
+  if (category === "tecnico") {
+    return "Dale, contame qué está pasando con la app, el auto o tu reserva y vemos cómo destrabarlo.";
+  }
+  if (category === "administrativo") {
+    return "Perfecto. Contame el detalle del tema (cobros, cuenta, documentación) y lo revisamos.";
+  }
+  return "Contame qué necesitás y te oriento.";
+}
+
+function baseTrace(
+  source: OrchestratorSource,
+  state: ConversationState
+): OrchestratorTrace {
   return {
-    source: "none",
-    localSkillId: null,
-    localSkillScore: null,
-    selectedSkillId: null,
-    selectedSkillScore: null,
-    aiSkillId: null,
-    aiConfidence: null,
-    aiReason: null,
-    aiSkillResponseUsed: false,
-    aiFaqLabel: null,
-    aiFaqConfidence: null,
-    aiFaqReason: null,
-    topCandidates: []
+    source,
+    agentAction: null,
+    agentError: null,
+    matchedSkillId: state.matchedSkillId,
+    category: state.category
   };
 }

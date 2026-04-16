@@ -7,10 +7,13 @@ import { config } from "./config.js";
 import { DedupeStore } from "./dedupe-store.js";
 import { ConversationStateStore } from "./fsm/state-store.js";
 import { renderTemplate } from "./fsm/templates.js";
+import type { ConversationTurn } from "./fsm/types.js";
 import { ConversationOrchestrator } from "./orchestrator/harness.js";
 import { loadSkills } from "./skills/repository.js";
 import { verifyChatwootSignature } from "./signature.js";
 import type { ChatwootWebhookPayload } from "./types.js";
+
+const HISTORY_HARD_LIMIT = 40;
 
 const app = Fastify({
   logger: {
@@ -38,27 +41,18 @@ const orchestrator = new ConversationOrchestrator(config, loadedSkills);
 app.log.info(
   {
     skillsLoaded: loadedSkills.length,
-    skillsMinScore: config.skillsMinScore,
     skillIds: loadedSkills.map(skill => skill.id),
-    enableAiSkillMatching: config.enableAiSkillMatching,
-    enableAiSkillResponse: config.enableAiSkillResponse,
-    aiSkillMinConfidence: config.aiSkillMinConfidence,
-    aiSkillMaxCandidates: config.aiSkillMaxCandidates,
-    enableAiFaqConfirmation: config.enableAiFaqConfirmation,
-    aiFaqMinConfidence: config.aiFaqMinConfidence,
+    agentEnabled: config.agentEnabled,
+    agentHistoryLimit: config.agentHistoryLimit,
+    agentMaxRetries: config.agentMaxRetries,
     businessHoursEnabled: config.businessHoursEnabled,
     businessTimezone: config.businessTimezone,
     businessWorkingDays: config.businessWorkingDays,
     businessStartMinutes: config.businessStartMinutes,
     businessEndMinutes: config.businessEndMinutes,
-    openrouterModel:
-      config.enableAiSkillMatching ||
-      config.enableAiSkillResponse ||
-      config.enableAiFaqConfirmation
-        ? config.openrouterModel
-        : "disabled"
+    openrouterModel: config.agentEnabled ? config.openrouterModel : "disabled"
   },
-  "Skills catalog loaded"
+  "Orchestrator ready"
 );
 
 app.get("/health", async () => ({ ok: true }));
@@ -137,10 +131,11 @@ const webhookHandler = async (
       currentState = {
         state: "cold_start",
         unknownAttempts: 0,
-        isUser: null,
         email: null,
         problem: null,
         matchedSkillId: null,
+        category: null,
+        history: [],
         updatedAt: Date.now()
       };
       conversationStateStore.set(conversationId, currentState);
@@ -165,68 +160,62 @@ const webhookHandler = async (
 
   const outboundMessage =
     decision.action === "handoff" && businessHours && !businessHours.isOpen
-      ? `Estamos fuera de horario de atencion (${config.businessHoursLabel}). Ya dejamos tu consulta para que un agente la retome apenas vuelva el equipo.`
-      : decision.replyText ?? renderTemplate(decision.replyKey);
+      ? renderTemplate("OUT_OF_HOURS_HANDOFF")
+      : decision.replyText ?? (decision.replyKey ? renderTemplate(decision.replyKey) : "");
 
-  if (orchestratorResult.trace.topCandidates.length > 0) {
-    request.log.info(
-      {
-        conversationId,
-        currentState: currentState.state,
-        skillSource: orchestratorResult.trace.source,
-        localSkillId: orchestratorResult.trace.localSkillId,
-        localSkillScore: orchestratorResult.trace.localSkillScore,
-        aiSkillId: orchestratorResult.trace.aiSkillId,
-        aiConfidence: orchestratorResult.trace.aiConfidence,
-        aiReason: orchestratorResult.trace.aiReason,
-        aiSkillResponseUsed: orchestratorResult.trace.aiSkillResponseUsed,
-        selectedSkillId: orchestratorResult.trace.selectedSkillId,
-        selectedSkillScore: orchestratorResult.trace.selectedSkillScore,
-        topCandidates: orchestratorResult.trace.topCandidates
-      },
-      "Skill match evaluated"
+  if (!outboundMessage) {
+    request.log.error(
+      { conversationId, decision },
+      "Empty outbound message; skipping send"
     );
-  }
-
-  if (currentState.state === "awaiting_faq_confirmation") {
-    request.log.info(
-      {
-        conversationId,
-        aiFaqLabel: orchestratorResult.trace.aiFaqLabel,
-        aiFaqConfidence: orchestratorResult.trace.aiFaqConfidence,
-        aiFaqReason: orchestratorResult.trace.aiFaqReason
-      },
-      "FAQ confirmation classified"
-    );
+    return { ok: true, ignored: "empty_outbound" };
   }
 
   await chatwoot.sendMessage(conversationId, outboundMessage);
+
+  const historyWithUser = appendTurn(currentState.history, {
+    role: "user",
+    content
+  });
 
   if (decision.addAgentNote) {
     await chatwoot.sendPrivateNote(
       conversationId,
       buildAgentSummaryNote({
-        isUser: decision.isUser,
         email: decision.email,
         problem: decision.problem,
-        matchedSkillId: decision.matchedSkillId
+        matchedSkillId: decision.matchedSkillId,
+        category: decision.category,
+        agentSummary: decision.agentSummary,
+        history: historyWithUser
       })
     );
   }
 
+  const nextHistory = appendTurn(historyWithUser, {
+    role: "assistant",
+    content: outboundMessage
+  });
+
   if (decision.action === "handoff") {
     await chatwoot.toggleStatus(conversationId, "open");
+    if (decision.priority) {
+      await chatwoot.togglePriority(conversationId, decision.priority);
+    }
     request.log.info(
       {
         conversationId,
         signal: decision.signal,
         previousState: currentState.state,
         nextState: decision.nextState,
-        unknownAttempts: decision.unknownAttempts,
-        isUser: decision.isUser,
-        hasEmail: Boolean(decision.email),
-        hasProblem: Boolean(decision.problem),
+        source: orchestratorResult.trace.source,
+        agentAction: orchestratorResult.trace.agentAction,
+        agentError: orchestratorResult.trace.agentError,
         matchedSkillId: decision.matchedSkillId,
+        category: decision.category,
+        hasEmail: Boolean(decision.email),
+        hasAgentSummary: Boolean(decision.agentSummary),
+        priority: decision.priority,
         inBusinessHours: businessHours?.isOpen ?? null
       },
       "Handoff triggered"
@@ -238,10 +227,12 @@ const webhookHandler = async (
         signal: decision.signal,
         previousState: currentState.state,
         nextState: decision.nextState,
-        unknownAttempts: decision.unknownAttempts,
-        isUser: decision.isUser,
-        hasEmail: Boolean(decision.email),
-        matchedSkillId: decision.matchedSkillId
+        source: orchestratorResult.trace.source,
+        agentAction: orchestratorResult.trace.agentAction,
+        agentError: orchestratorResult.trace.agentError,
+        matchedSkillId: decision.matchedSkillId,
+        category: decision.category,
+        unknownAttempts: decision.unknownAttempts
       },
       "Bot replied"
     );
@@ -250,10 +241,11 @@ const webhookHandler = async (
   conversationStateStore.set(conversationId, {
     state: decision.nextState,
     unknownAttempts: decision.unknownAttempts,
-    isUser: decision.isUser,
     email: decision.email,
     problem: decision.problem,
     matchedSkillId: decision.matchedSkillId,
+    category: decision.category,
+    history: decision.nextState === "cold_start" ? [] : nextHistory,
     updatedAt: Date.now()
   });
 
@@ -325,23 +317,46 @@ function normalizeConversationStatus(
   return null;
 }
 
+function appendTurn(
+  history: ConversationTurn[],
+  turn: ConversationTurn
+): ConversationTurn[] {
+  const next = [...history, turn];
+  if (next.length > HISTORY_HARD_LIMIT) {
+    return next.slice(next.length - HISTORY_HARD_LIMIT);
+  }
+  return next;
+}
+
 function buildAgentSummaryNote(params: {
-  isUser: boolean | null;
   email: string | null;
   problem: string | null;
   matchedSkillId: string | null;
+  category: string | null;
+  agentSummary: string | null;
+  history: ConversationTurn[];
 }): string {
-  const userType =
-    params.isUser === null ? "sin confirmar" : params.isUser ? "si" : "no";
   const email = params.email || "no informado";
   const problem = params.problem || "sin detalle";
   const matchedSkillId = params.matchedSkillId || "sin skill";
+  const category = params.category || "sin clasificar";
+  const agentSummary = params.agentSummary || "sin resumen del agente";
+
+  const lastUserTurns = params.history
+    .filter(turn => turn.role === "user")
+    .slice(-3)
+    .map(turn => `  · ${turn.content}`)
+    .join("\n");
 
   return [
     "Resumen preatencion:",
-    `- Usuario actual: ${userType}`,
+    `- Categoria: ${category}`,
     `- Email: ${email}`,
     `- Consulta: ${problem}`,
-    `- Skill sugerida: ${matchedSkillId}`
-  ].join("\n");
+    `- Skill sugerida: ${matchedSkillId}`,
+    `- Resumen del agente: ${agentSummary}`,
+    lastUserTurns ? `- Ultimos mensajes del usuario:\n${lastUserTurns}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

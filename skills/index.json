@@ -1,19 +1,157 @@
 {
-  "version": 1,
+  "version": 4,
+  "generated_at": "2026-04-16T20:04:51.626Z",
   "skills": [
     {
       "id": "auto_no_abre",
-      "file": "auto-no-abre.json",
+      "file": "auto-no-abre.md",
+      "title": "El auto no abre",
+      "description": "El usuario no logra abrir el auto desde la app.",
+      "category": "tecnico",
       "enabled": true
     },
     {
-      "id": "reporte_danios_fotos",
-      "file": "reporte-danios-fotos.json",
+      "id": "auxilio_mecanico_aca",
+      "file": "auxilio-mecanico-aca.md",
+      "title": "Auxilio mecánico en ruta",
+      "description": "El auto tuvo un problema mecánico, no prende o necesita asistencia durante una reserva.",
+      "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "cambio_vehiculo_por_siniestro",
+      "file": "cambio-vehiculo-por-siniestro.md",
+      "title": "Cambio de vehículo asignado",
+      "description": "El usuario fue notificado de un cambio de vehículo o consulta qué pasa si el auto tiene un problema.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "combustible_limpieza_unidad",
+      "file": "combustible-limpieza-unidad.md",
+      "title": "Combustible o limpieza de la unidad",
+      "description": "Consultas y reportes sobre combustible, tanque y limpieza del auto.",
+      "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "conductor_adicional",
+      "file": "conductor-adicional.md",
+      "title": "Agregar conductor adicional",
+      "description": "Proceso y requisitos para sumar un segundo conductor autorizado a una reserva.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "consulta_cobros_facturacion",
+      "file": "consulta-cobros-facturacion.md",
+      "title": "Cobros, cargos y facturación",
+      "description": "Consultas por cargos, diferencias de monto, facturas, cuotas y medios de pago.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "consulta_reserva_modificacion",
+      "file": "consulta-reserva-modificacion.md",
+      "title": "Modificar, extender o cancelar reserva",
+      "description": "Gestión de cambios, extensión, cancelación y políticas asociadas de reservas.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "disponibilidad_crear_alerta",
+      "file": "disponibilidad-crear-alerta.md",
+      "title": "Sin disponibilidad y creación de alerta",
+      "description": "Qué hacer cuando no hay vehículos disponibles para la fecha buscada.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "documentacion_validacion_usuario",
+      "file": "documentacion-validacion-usuario.md",
+      "title": "Documentación y validación de cuenta",
+      "description": "Requisitos de documentos, antigüedad de licencia, principiantes y acceso a camionetas.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "eliminar_cuenta_o_tarjeta",
+      "file": "eliminar-cuenta-o-tarjeta.md",
+      "title": "Eliminar cuenta o tarjeta",
+      "description": "Proceso para dar de baja la cuenta o eliminar una tarjeta asociada.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "franquicia_seguro",
+      "file": "franquicia-seguro.md",
+      "title": "Franquicia y cobertura del seguro",
+      "description": "Qué cubre el seguro, franquicia por vehículo y responsabilidad del usuario.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "luz_tablero_servicio",
+      "file": "luz-tablero-servicio.md",
+      "title": "Luz de service en el tablero",
+      "description": "Tranquilizar al usuario si ve la luz de próximo service o distinguirla de una falla real.",
+      "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "peajes_telepase",
+      "file": "peajes-telepase.md",
+      "title": "Peajes y telepase",
+      "description": "Cómo se cobran los peajes durante una reserva y uso del telepase del vehículo.",
+      "category": "administrativo",
       "enabled": true
     },
     {
       "id": "problema_administrativo_ticket",
-      "file": "problema-administrativo-ticket.json",
+      "file": "problema-administrativo-ticket.md",
+      "title": "Problema administrativo",
+      "description": "Canal genérico para temas administrativos que no caen en un skill específico.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "problema_app_general",
+      "file": "problema-app-general.md",
+      "title": "Problemas generales de app",
+      "description": "Fallas técnicas de la app que no encajan en un flujo específico.",
+      "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "problema_contrasena_acceso",
+      "file": "problema-contrasena-acceso.md",
+      "title": "Problema de acceso, contraseña o PIN",
+      "description": "Soporte para login, reset de contraseña, PIN de seguridad y cuenta bloqueada.",
+      "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "reporte_danios_fotos",
+      "file": "reporte-danios-fotos.md",
+      "title": "Reporte de daños con fotos",
+      "description": "El usuario quiere reportar un daño o el chequeo pre-viaje no se puede hacer desde la app.",
+      "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "socios_aca_cupon",
+      "file": "socios-aca-cupon.md",
+      "title": "Cupón de descuento para socios ACA",
+      "description": "Condiciones, uso y resolución de problemas del descuento para socios del Automóvil Club Argentino.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "trabajo_apps_rideshare",
+      "file": "trabajo-apps-rideshare.md",
+      "title": "Uso para apps de transporte o mensajería",
+      "description": "Política sobre uso de los vehículos en aplicaciones de transporte de pasajeros o mensajería.",
+      "category": "administrativo",
       "enabled": true
     }
   ]
