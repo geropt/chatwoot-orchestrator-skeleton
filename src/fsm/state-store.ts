@@ -8,6 +8,7 @@ const DEFAULT_STATE: ConversationState = {
   matchedSkillId: null,
   category: null,
   history: [],
+  priorContext: null,
   updatedAt: Date.now()
 };
 

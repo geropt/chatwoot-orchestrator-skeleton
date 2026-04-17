@@ -18,7 +18,7 @@ ask_email: false
 - ¿Podés mandar fotos del tablero y del interior?
 
 ## Pasos a guiar
-1. Tipo de combustible: autos estándar van con nafta súper; camionetas suelen requerir premium.
+1. Tipo de combustible: Revisar en la tapa de combustible del vehiculo y leer la indicacion.
 2. Devolución: podés devolver el auto con el nivel de combustible que quieras. Si lo devolvés con más del inicial, te queda saldo a favor; si es con menos, se cobra la diferencia.
 3. Reportes: pedir fotos claras del tablero (para nivel) y del interior (para limpieza).
 4. Si la app no deja hacer el reporte, aceptar fotos por este medio o a hola@mykeego.com.

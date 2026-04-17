@@ -29,6 +29,7 @@ export type ConversationState = {
   matchedSkillId: string | null;
   category: ConversationCategory | null;
   history: ConversationTurn[];
+  priorContext: string | null;
   updatedAt: number;
 };
 

@@ -102,13 +102,13 @@ export function detectCategory(normalized: string): ConversationCategory | null 
     return null;
   }
 
-  if (/^1\)?$/.test(normalized) || /^opcion\s*1$/.test(normalized)) {
+  if (/^2\)?$/.test(normalized) || /^opcion\s*2$/.test(normalized)) {
     return "tecnico";
   }
-  if (/^2\)?$/.test(normalized) || /^opcion\s*2$/.test(normalized)) {
+  if (/^3\)?$/.test(normalized) || /^opcion\s*3$/.test(normalized)) {
     return "administrativo";
   }
-  if (/^3\)?$/.test(normalized) || /^opcion\s*3$/.test(normalized)) {
+  if (/^4\)?$/.test(normalized) || /^opcion\s*4$/.test(normalized)) {
     return "general";
   }
 

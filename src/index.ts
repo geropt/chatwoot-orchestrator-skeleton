@@ -142,6 +142,7 @@ const webhookHandler = async (
         matchedSkillId: null,
         category: null,
         history: [],
+        priorContext: null,
         updatedAt: Date.now()
       };
       conversationStateStore.set(conversationId, currentState);
@@ -155,12 +156,26 @@ const webhookHandler = async (
     }
   }
 
+  const contactId = extractContactId(payload);
+
+  let priorContext: string | null = currentState.priorContext ?? null;
+  if (currentState.state === "cold_start" && contactId != null) {
+    try {
+      priorContext = await chatwoot.getContactPriorContext(contactId, conversationId);
+    } catch (err) {
+      request.log.warn(
+        { err: err instanceof Error ? err.message : String(err), conversationId },
+        "Failed to fetch prior context"
+      );
+    }
+  }
+
   const orchestratorResult = await orchestrator.run({
     content,
     currentState,
     toolbox: {
       conversationId,
-      contactId: extractContactId(payload),
+      contactId,
       email: currentState.email,
       logger: request.log
     }
@@ -206,11 +221,20 @@ const webhookHandler = async (
     );
   }
 
+  if (orchestratorResult.trace.agentAction === "resolve") {
+    await chatwoot.sendPrivateNote(
+      conversationId,
+      `✅ El bot resolvió la consulta sin intervención del operador.\n• Skill aplicado: ${formatSkillReference(decision.matchedSkillId)}\n• Categoría: ${decision.category || "sin clasificar"}`
+    );
+  }
+
   const nextHistory = appendTurn(historyWithUser, {
     role: "assistant",
     content: outboundMessage
   });
 
+  // TODO: considerar llamar toggleStatus(conversationId, "resolved") cuando action === "resolve"
+  // por ahora el bot resetea estado interno pero la conversación queda open en Chatwoot
   if (decision.action === "handoff") {
     await chatwoot.toggleStatus(conversationId, "open");
     if (decision.priority) {
@@ -309,6 +333,7 @@ const webhookHandler = async (
     matchedSkillId: decision.matchedSkillId,
     category: decision.category,
     history: decision.nextState === "cold_start" ? [] : nextHistory,
+    priorContext: decision.nextState === "cold_start" ? null : priorContext,
     updatedAt: Date.now()
   });
 

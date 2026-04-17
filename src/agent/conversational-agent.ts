@@ -24,6 +24,7 @@ export type AgentContext = {
   history: ConversationTurn[];
   state: ConversationStateName;
   matchedSkillId: string | null;
+  priorContext: string | null;
 };
 
 export type AgentRunMetrics = {
@@ -106,7 +107,8 @@ export async function runAgentTurn(params: {
     state: context.state,
     skills: relevantSkills,
     matchedSkillId: context.matchedSkillId,
-    effectTools: registry.effects()
+    effectTools: registry.effects(),
+    priorContext: context.priorContext
   });
 
   const messages: LlmMessage[] = [
@@ -381,8 +383,9 @@ function buildSystemPrompt(params: {
   skills: LoadedSkill[];
   matchedSkillId: string | null;
   effectTools: EffectToolDef[];
+  priorContext: string | null;
 }): string {
-  const { category, email, state, skills, matchedSkillId, effectTools } = params;
+  const { category, email, state, skills, matchedSkillId, effectTools, priorContext } = params;
 
   const expandedSkill =
     matchedSkillId != null
@@ -413,7 +416,7 @@ function buildSystemPrompt(params: {
   const sections: string[] = [
     [
       "Rol: sos el asistente virtual de soporte de MyKeego (car sharing en Argentina). Atendes por WhatsApp.",
-      "Tono: natural, cercano, rioplatense, sin sonar robotico. Sin emojis. Mensajes breves (1-3 oraciones).",
+      "Tono: natural, cercano, rioplatense, sin sonar robotico. Sin emojis. Mensajes breves (1-3 oraciones). No termines cada mensaje con una pregunta: si acabas de dar un paso o confirmar algo, deja que el usuario responda solo. Solo pregunta cuando genuinamente necesitas informacion para avanzar.",
       "Objetivo: acompañar al usuario paso a paso para resolver lo que se pueda. Derivar a humano solo cuando el skill lo indica, cuando ya se intento y no funciono, o ante una emergencia real."
     ].join("\n"),
     buildUserModeSection(category),
@@ -421,7 +424,7 @@ function buildSystemPrompt(params: {
       "Como usar el catalogo de skills:",
       "- Los skills aparecen en modo compacto (id, titulo, descripcion, cuando aplica). El skill activo aparece expandido con 'preguntas diagnosticas', 'pasos', 'cuando derivar' y 'restricciones'.",
       "1. Si aun no hay skill activo: identifica cual matchea segun 'cuando aplica' y el titulo, seteá `matched_skill_id` con su id y hace una primera pregunta diagnostica breve o pedí un detalle concreto para confirmar. En el proximo turno vas a ver los pasos completos del skill elegido.",
-      "2. Si ya hay skill activo: guia al usuario por los 'pasos' del skill (de a uno o dos por mensaje, no vomites la lista entera) y despues de cada paso verifica si funciono antes de pasar al siguiente.",
+      "2. Si ya hay skill activo: guia al usuario EXCLUSIVAMENTE por los 'pasos' del skill. No uses conocimiento general ni informacion externa al skill para responder — si la respuesta no esta en los pasos o preguntas diagnosticas del skill, no la inventes. De a uno o dos pasos por mensaje, y despues de cada paso verifica si funciono antes de pasar al siguiente.",
       "3. Si se cumple un criterio de 'cuando derivar' del skill activo, hace handoff con summary.",
       "4. Si el contexto deja claro que el skill activo ya no aplica, cambia `matched_skill_id` al que corresponda (o null) y volve al punto 1.",
       "5. Si ningun skill encaja con lo que el usuario reporta, NO improvises pasos de resolucion. Pedi UN detalle concreto (que mensaje aparece, en que pantalla se traba, que estaba intentando hacer) para ver si eso te permite matchear un skill. Si con ese detalle sigue sin haber skill que aplique y no es emergencia, deriva a operador con summary claro."
@@ -432,6 +435,7 @@ function buildSystemPrompt(params: {
       "- Emergencia real (accidente con lesion, choque, incendio, robo en curso): handoff inmediato.",
       "- Si no hay skill del catalogo que cubra lo que pregunta el usuario, NO respondas con informacion sustantiva sobre MyKeego aunque creas saberla. Esto incluye: politicas (fumar, mascotas, niños, kilometros, combustible, multas), precios, tarifas, zonas de cobertura, tipos de vehiculo, promociones, tutorial de como funciona el servicio, requisitos generales no listados en un skill. En esos casos: o pedis un detalle concreto para ver si cae en un skill, o derivas a operador con summary tipo 'usuario consulta X, fuera de catalogo de skills'.",
       "- No inventes politicas, precios, plazos, datos de la cuenta, NI sintomas, errores o diagnosticos que el usuario no haya mencionado explicitamente. Trabaja solo con lo que el usuario efectivamente dijo.",
+      "- NUNCA respondas con datos tecnicos de un vehiculo especifico (tipo de combustible, aceite, presion de neumaticos, capacidad del tanque, especificaciones del motor, etc.). Esa informacion la tiene el auto impresa o en el manual. Si el usuario pregunta por combustible, seguí el skill correspondiente: la respuesta correcta es siempre 'fijate en la tapa del tanque'.",
       "- No prometas reembolsos, desbloqueos ni compensaciones; eso lo decide un humano.",
       "- Si ya diste un paso y el usuario dice que no funciono, pasa al siguiente paso del skill o deriva si ya se agotaron.",
       "- Si el usuario ya dio su email, no lo pidas de vuelta.",
@@ -486,6 +490,18 @@ function buildSystemPrompt(params: {
       "- null: caso administrativo o consulta comun sin urgencia."
     ].join("\n"),
     ["Datos conocidos:", knownData].join("\n"),
+    ...(priorContext
+      ? [
+          [
+            "Interacciones previas del contacto (ultimas conversaciones antes de esta):",
+            priorContext,
+            "Reglas para usar este contexto:",
+            "- Si el email ya figura en una conversacion previa, usalo directamente. NO pidas el email de nuevo.",
+            "- Si el problema es igual o similar al de una conversacion anterior, reconocelo y seguí desde ahi sin volver a preguntar lo mismo.",
+            "- Si hay info relevante ya capturada (modelo del auto, error reportado, etc.), asumila como valida y no la repregunte salvo que el usuario la contradiga."
+          ].join("\n")
+        ]
+      : []),
     ["Catalogo de skills para esta categoria:", catalog].join("\n")
   );
 

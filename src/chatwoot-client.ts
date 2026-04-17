@@ -105,6 +105,42 @@ export class ChatwootClient {
     return { id: body.id, displayId: body.display_id };
   }
 
+  async getContactPriorContext(
+    contactId: number,
+    currentConversationId: number
+  ): Promise<string | null> {
+    const body = await this.request<{
+      payload?: Array<{
+        id?: number;
+        status?: string;
+        created_at?: number;
+        messages?: Array<{ content?: string; message_type?: number; created_at?: number }>;
+      }>;
+    }>(`/contacts/${contactId}/conversations`, { method: "GET" });
+
+    const conversations = body?.payload;
+    if (!Array.isArray(conversations) || conversations.length === 0) return null;
+
+    const prior = conversations
+      .filter(c => typeof c.id === "number" && c.id !== currentConversationId)
+      .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+      .slice(0, 3);
+
+    if (prior.length === 0) return null;
+
+    const lines = prior.map((c, i) => {
+      const date = c.created_at
+        ? new Date(c.created_at * 1000).toLocaleDateString("es-AR")
+        : "fecha desconocida";
+      const status = c.status ?? "desconocido";
+      const firstUserMsg = c.messages?.find(m => m.message_type === 0)?.content?.trim();
+      const preview = firstUserMsg ? `"${firstUserMsg.slice(0, 120)}"` : "(sin mensaje)";
+      return `Conversación ${i + 1} (${date}, ${status}): ${preview}`;
+    });
+
+    return lines.join("\n");
+  }
+
   private async request<T = unknown>(
     path: string,
     init: RequestInit

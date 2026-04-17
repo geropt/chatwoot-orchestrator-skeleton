@@ -357,7 +357,8 @@ export class ConversationOrchestrator {
         email: state.email,
         history: state.history,
         state: state.state,
-        matchedSkillId: state.matchedSkillId
+        matchedSkillId: state.matchedSkillId,
+        priorContext: state.priorContext ?? null
       },
       skills: this.skills,
       config: this.config,
@@ -597,7 +598,7 @@ function isTripEntry(content: string): boolean {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
-  return /^0\)?$|^opcion\s*0$|\bviaje\b|\ben curso\b/.test(normalized);
+  return /^1\)?$|^opcion\s*1$|\bviaje\b|\ben curso\b/.test(normalized);
 }
 
 function parseTripAction(content: string): "damage" | "emergency" | null {
