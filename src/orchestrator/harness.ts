@@ -19,6 +19,7 @@ import type {
   ParsedInput
 } from "../fsm/types.js";
 import type { LoadedSkill } from "../skills/types.js";
+import { preMatchSkill } from "../agent/skill-matcher.js";
 
 export type OrchestratorInput = {
   content: string;
@@ -350,6 +351,19 @@ export class ConversationOrchestrator {
       };
     }
 
+    let matchedSkillId = state.matchedSkillId;
+    if (!matchedSkillId && this.config.skillMatcherModel) {
+      matchedSkillId = await preMatchSkill({
+        message: rawContent,
+        skills: this.skills,
+        category: state.category,
+        openrouterBaseUrl: this.config.openrouterBaseUrl,
+        openrouterApiKey: this.config.openrouterApiKey,
+        matcherModel: this.config.skillMatcherModel,
+        timeoutMs: this.config.openrouterTimeoutMs
+      });
+    }
+
     const agentResult = await runAgentTurn({
       context: {
         content: rawContent,
@@ -357,7 +371,7 @@ export class ConversationOrchestrator {
         email: state.email,
         history: state.history,
         state: state.state,
-        matchedSkillId: state.matchedSkillId,
+        matchedSkillId,
         priorContext: state.priorContext ?? null
       },
       skills: this.skills,

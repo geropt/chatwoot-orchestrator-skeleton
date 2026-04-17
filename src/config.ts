@@ -17,6 +17,7 @@ export type AppConfig = {
   openrouterApiKey: string;
   openrouterModel: string;
   openrouterTimeoutMs: number;
+  skillMatcherModel: string | null;
   businessHoursEnabled: boolean;
   businessTimezone: string;
   businessWorkingDays: number[];
@@ -165,6 +166,7 @@ export const config: AppConfig = {
   openrouterApiKey,
   openrouterModel,
   openrouterTimeoutMs: numberEnv("OPENROUTER_TIMEOUT_MS", 20000),
+  skillMatcherModel: optional("SKILL_MATCHER_MODEL") || null,
   businessHoursEnabled,
   businessTimezone: timezoneEnv(
     "BUSINESS_TIMEZONE",

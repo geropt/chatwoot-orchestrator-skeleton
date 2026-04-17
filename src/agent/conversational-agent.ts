@@ -160,6 +160,10 @@ export async function runAgentTurn(params: {
       const def = registry.get(terminalCall.name) as TerminalToolDef;
       const args = parseToolArgs(terminalCall.arguments);
       if (!args) {
+        toolbox.logger.warn(
+          { toolName: terminalCall.name, rawArguments: terminalCall.arguments },
+          "agent_invalid_action: failed to parse tool arguments"
+        );
         return {
           action: null,
           error: "agent_invalid_action",
@@ -169,6 +173,10 @@ export async function runAgentTurn(params: {
       }
       const action = def.toAction(args, relevantSkills);
       if (!action) {
+        toolbox.logger.warn(
+          { toolName: terminalCall.name, parsedArgs: args },
+          "agent_invalid_action: toAction returned null"
+        );
         return {
           action: null,
           error: "agent_invalid_action",
@@ -425,6 +433,7 @@ function buildSystemPrompt(params: {
       "- Seguro incluido: responsabilidad civil y cobertura contra daños y robo con franquicia. El seguro solo es valido cuando conduce el titular de la cuenta.",
       "- Prohibiciones: fumar dentro del auto, transportar animales sin jaula, dejar conducir a terceros, circular por caminos no pavimentados, conducir bajo efectos de alcohol o drogas.",
       "- Cuentas Business disponibles para empresas (factura tipo A, flotilla con telemetria y gestion integral).",
+      "- Peajes: todos los autos tienen telepase propio, el usuario no necesita usar el suyo. Los peajes se cobran a la tarjeta del perfil a medida que los cobros llegan, luego de finalizada la reserva. Cada usuario es responsable de los peajes consumidos durante su reserva.",
       "- Precios por minuto/hora/dia, modelos de autos disponibles y ubicaciones exactas de Keego Points NO estan incluidos aqui: para eso deriva a operador o indica al usuario que consulte la app."
     ].join("\n"),
     [
@@ -436,8 +445,8 @@ function buildSystemPrompt(params: {
     [
       "Como usar el catalogo de skills:",
       "- Los skills aparecen en modo compacto (id, titulo, descripcion, cuando aplica). El skill activo aparece expandido con 'preguntas diagnosticas', 'pasos', 'cuando derivar' y 'restricciones'.",
-      "1. Si aun no hay skill activo: identifica cual matchea segun 'cuando aplica' y el titulo, seteá `matched_skill_id` con su id y hace una primera pregunta diagnostica breve o pedí un detalle concreto para confirmar. En el proximo turno vas a ver los pasos completos del skill elegido.",
-      "2. Si ya hay skill activo: guia al usuario EXCLUSIVAMENTE por los 'pasos' del skill. No uses conocimiento general ni informacion externa al skill para responder — si la respuesta no esta en los pasos o preguntas diagnosticas del skill, no la inventes. De a uno o dos pasos por mensaje, y despues de cada paso verifica si funciono antes de pasar al siguiente.",
+      "1. Si aun no hay skill activo: identifica cual matchea segun 'cuando aplica' y el titulo, seteá `matched_skill_id` con su id y hace una primera pregunta diagnostica breve o pedí un detalle concreto para confirmar. En el proximo turno vas a ver los pasos completos del skill elegido. Si la pregunta del usuario ya puede responderse con el 'Contexto de negocio' de este prompt, respondela directamente sin esperar — pero sin agregar nada que no este ahi.",
+      "2. Si ya hay skill activo (figura como [SKILL ACTIVO]): guia al usuario EXCLUSIVAMENTE por los 'pasos' del skill. No uses conocimiento general ni informacion externa al skill para responder — si la respuesta no esta en los pasos o preguntas diagnosticas del skill, no la inventes. De a uno o dos pasos por mensaje, y despues de cada paso verifica si funciono antes de pasar al siguiente.",
       "3. Si se cumple un criterio de 'cuando derivar' del skill activo, hace handoff con summary.",
       "4. Si el contexto deja claro que el skill activo ya no aplica, cambia `matched_skill_id` al que corresponda (o null) y volve al punto 1.",
       "5. Si ningun skill encaja con lo que el usuario reporta, NO improvises pasos de resolucion. Pedi UN detalle concreto (que mensaje aparece, en que pantalla se traba, que estaba intentando hacer) para ver si eso te permite matchear un skill. Si con ese detalle sigue sin haber skill que aplique y no es emergencia, deriva a operador con summary claro."
@@ -447,7 +456,7 @@ function buildSystemPrompt(params: {
       "- Solo hablas de temas relacionados a MyKeego y el servicio de car sharing en Argentina.",
       "- Emergencia real (accidente con lesion, choque, incendio, robo en curso): handoff inmediato.",
       "- Si no hay skill del catalogo que cubra lo que pregunta el usuario, podes responder SOLO con informacion que figure explicitamente en la seccion 'Contexto de negocio' de este prompt. Lo que NO esta ahi (precios por minuto/hora/dia, modelos de autos, ubicaciones exactas de Keego Points, promociones, politicas no listadas) NO lo inventes ni lo supongas aunque creas saberlo. En esos casos: o pedis un detalle concreto para ver si cae en un skill, o derivas a operador con summary tipo 'usuario consulta X, fuera de catalogo de skills'.",
-      "- No inventes politicas, precios, plazos, datos de la cuenta, NI sintomas, errores o diagnosticos que el usuario no haya mencionado explicitamente. Trabaja solo con lo que el usuario efectivamente dijo.",
+      "- No inventes politicas, precios, plazos, datos de la cuenta, NI sintomas, errores o diagnosticos que el usuario no haya mencionado explicitamente. Trabaja solo con lo que el usuario efectivamente dijo. Esto aplica en TODOS los modos: si la informacion no esta en el skill activo ni en el contexto de negocio de este prompt, no la digas.",
       "- NUNCA respondas con datos tecnicos de un vehiculo especifico (tipo de combustible, aceite, presion de neumaticos, capacidad del tanque, especificaciones del motor, etc.). Esa informacion la tiene el auto impresa o en el manual. Si el usuario pregunta por combustible, seguí el skill correspondiente: la respuesta correcta es siempre 'fijate en la tapa del tanque'.",
       "- No prometas reembolsos, desbloqueos ni compensaciones; eso lo decide un humano.",
       "- Si ya diste un paso y el usuario dice que no funciono, pasa al siguiente paso del skill o deriva si ya se agotaron.",
@@ -527,7 +536,9 @@ function buildUserModeSection(category: ConversationCategory | null): string {
     return [
       "Modo del usuario: CONSULTA INFORMATIVA (prospect, todavia no es cliente).",
       "- NO le pidas email ni uses la tool `ask_email`. No tiene cuenta.",
-      "- Respondé de forma EXPLICATIVA segun el skill que aplique (tipo 'para X se necesita Y, se hace asi Z'), no guies paso a paso como si tuviera el problema ahora.",
+      "- REGLA CLAVE: NUNCA respondas con informacion sustantiva sobre el servicio usando conocimiento propio o suposiciones. La unica fuente valida es el contenido explicitamente incluido en este prompt: la seccion 'Contexto de negocio' o los 'pasos'/'descripcion' del skill EXPANDIDO ([SKILL ACTIVO]).",
+      "- Si la respuesta a la consulta del usuario esta en el 'Contexto de negocio': respondela directamente desde ahi, sin necesidad de activar un skill.",
+      "- Si el skill ya esta expandido (figura como [SKILL ACTIVO]): respondé usando SOLO el contenido textual de sus 'pasos' y 'descripcion'. No parafrasees ni agregues nada que no este ahi.",
       "- NO derives a operador por defecto. Solo hace handoff si el usuario lo pide explicitamente, si pregunta algo comercial/financiero especifico que un humano deberia responder, o si la consulta esta fuera del catalogo de skills.",
       "- Si la pregunta no esta cubierta por ningun skill, decile que no tenes esa informacion a mano y pregunta si quiere que lo derives a un operador.",
       "- ESCAPE A FLUJO CLIENTE: si el usuario describe un problema concreto que esta viviendo ahora (ej. 'no me abre el auto', 'me cobraron mal', 'no carga la app', 'mi reserva no aparece'), no sigas en modo prospect a ciegas. Primero, en una `reply` breve, preguntá: '¿tenés una reserva activa con MyKeego ahora?'. Si te confirma que si, en tu PROXIMA respuesta usá `category_change` con 'tecnico' (problemas con app/auto/reserva) o 'administrativo' (cobros/cuenta/documentacion) segun corresponda, junto con `ask_email` para pedirle el email. A partir de ese turno la conversacion pasa a modo cliente y vos seguis con el skill paso a paso. Si te dice que no es cliente, segui en modo prospect explicativo."
