@@ -1,5 +1,6 @@
 export type ConversationStateName =
   | "cold_start"
+  | "awaiting_trip_action"
   | "awaiting_category"
   | "agent_active"
   | "awaiting_email"
@@ -42,6 +43,7 @@ export type UserSignal =
   | "unknown";
 
 export type TemplateKey =
+  | "ASK_TRIP_ACTION"
   | "WELCOME_TRIAGE"
   | "ASK_CATEGORY_RETRY"
   | "ASK_EMAIL"

@@ -28,6 +28,9 @@ export type OrchestratorInput = {
 
 export type OrchestratorSource =
   | "cold_start"
+  | "trip_action_prompt"
+  | "trip_damage_handoff"
+  | "trip_emergency_handoff"
   | "category_set"
   | "category_retry"
   | "general_handoff"
@@ -94,6 +97,8 @@ export class ConversationOrchestrator {
     switch (input.currentState.state) {
       case "cold_start":
         return this.handleColdStart(input, parsed);
+      case "awaiting_trip_action":
+        return this.handleAwaitingTripAction(input, parsed);
       case "awaiting_category":
         return this.handleAwaitingCategory(input, parsed);
       case "agent_active":
@@ -134,10 +139,71 @@ export class ConversationOrchestrator {
     };
   }
 
+  private async handleAwaitingTripAction(
+    input: OrchestratorInput,
+    parsed: ParsedInput
+  ): Promise<OrchestratorResult> {
+    const tripAction = parseTripAction(input.content);
+
+    if (tripAction === "damage") {
+      const agentState: ConversationState = {
+        ...input.currentState,
+        state: "agent_active",
+        category: "tecnico",
+        problem: "Reporte de daños al vehículo en viaje en curso",
+        matchedSkillId: "reporte_danios_fotos"
+      };
+      const result = await this.runAgentWithState(
+        agentState,
+        parsed,
+        "Quiero reportar daños al vehículo",
+        input.toolbox
+      );
+      return { ...result, trace: { ...result.trace, source: "trip_damage_handoff" } };
+    }
+
+    if (tripAction === "emergency") {
+      return {
+        decision: buildHandoffDecision({
+          currentState: input.currentState,
+          signal: parsed.signal,
+          replyKey: "HANDOFF_HUMAN",
+          replyText: null,
+          problem: "Emergencia durante viaje en curso",
+          category: "tecnico",
+          addAgentNote: true,
+          priority: "urgent"
+        }),
+        trace: baseTrace("trip_emergency_handoff", input.currentState)
+      };
+    }
+
+    return this.buildUnknownRetry(input.currentState, parsed, {
+      nextState: "awaiting_trip_action",
+      retryTemplate: "ASK_TRIP_ACTION",
+      source: "trip_action_prompt"
+    });
+  }
+
   private async handleAwaitingCategory(
     input: OrchestratorInput,
     parsed: ParsedInput
   ): Promise<OrchestratorResult> {
+    if (isTripEntry(input.content)) {
+      return {
+        decision: buildReplyDecision({
+          currentState: input.currentState,
+          replyKey: "ASK_TRIP_ACTION",
+          replyText: null,
+          nextState: "awaiting_trip_action",
+          signal: parsed.signal,
+          unknownAttempts: 0,
+          category: "tecnico"
+        }),
+        trace: baseTrace("trip_action_prompt", input.currentState)
+      };
+    }
+
     if (parsed.signal === "category" && parsed.category) {
       const category = parsed.category;
       const followUp = categoryFollowUpText(category);
@@ -359,7 +425,7 @@ export class ConversationOrchestrator {
     parsed: ParsedInput,
     options: {
       nextState: ConversationState["state"];
-      retryTemplate: "ASK_CATEGORY_RETRY" | "ASK_EMAIL_RETRY";
+      retryTemplate: "ASK_TRIP_ACTION" | "ASK_CATEGORY_RETRY" | "ASK_EMAIL_RETRY";
       source: OrchestratorSource;
     }
   ): OrchestratorResult {
@@ -503,7 +569,7 @@ function translateAgentAction(params: {
 
 function categoryFollowUpText(category: ConversationCategory): string {
   if (category === "tecnico") {
-    return "Dale, contame qué está pasando con la app, el auto o tu reserva y vemos cómo destrabarlo.";
+    return "Dale, contame qué está pasando con la app o tu reserva y lo revisamos.";
   }
   if (category === "administrativo") {
     return "Perfecto. Contame el detalle del tema (cobros, cuenta, documentación) y lo revisamos.";
@@ -523,6 +589,26 @@ function baseTrace(
     category: state.category,
     agentMetrics: null
   };
+}
+
+function isTripEntry(content: string): boolean {
+  const normalized = content
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  return /^0\)?$|^opcion\s*0$|\bviaje\b|\ben curso\b/.test(normalized);
+}
+
+function parseTripAction(content: string): "damage" | "emergency" | null {
+  const normalized = content
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (/^1$|da[ñn]o|reportar/.test(normalized)) return "damage";
+  if (/^2$|emergencia|urgente/.test(normalized)) return "emergency";
+  return null;
 }
 
 function isTechnicalAgentError(error: string | null): boolean {

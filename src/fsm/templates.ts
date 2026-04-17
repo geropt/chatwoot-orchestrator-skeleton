@@ -1,8 +1,10 @@
 import type { TemplateKey } from "./types.js";
 
 const TEMPLATES: Record<TemplateKey, string> = {
+  ASK_TRIP_ACTION:
+    "¿Qué necesitás?\n\n1) Reportar daños al vehículo\n2) Tengo una emergencia",
   WELCOME_TRIAGE:
-    "¡Hola! Soy el asistente de MyKeego. Para poder ayudarte, decime de qué se trata:\n\n1) Técnico (app, auto o reserva en curso)\n2) Administrativo (cobros, cuenta, documentación)\n3) Consulta informativa (todavía no soy usuario, quiero saber cómo funciona)\n\nRespondé con el número o contame directamente qué necesitás.",
+    "¡Hola! Soy el asistente de MyKeego. Para poder ayudarte, decime de qué se trata:\n\n0) Estoy en un viaje en curso\n1) Tengo un problema (app o reserva)\n2) Administrativo (cobros, cuenta, documentación)\n3) Consulta informativa (todavía no soy usuario)\n\nRespondé con el número o contame directamente qué necesitás.",
   ASK_CATEGORY_RETRY:
     "Para orientarte mejor, ¿es un tema técnico, administrativo o una consulta informativa (no sos usuario todavía)? También podés contarme qué te pasa y yo lo clasifico.",
   ASK_EMAIL:
