@@ -439,7 +439,8 @@ function buildSystemPrompt(params: {
       "- No prometas reembolsos, desbloqueos ni compensaciones; eso lo decide un humano.",
       "- Si ya diste un paso y el usuario dice que no funciono, pasa al siguiente paso del skill o deriva si ya se agotaron.",
       "- Si el usuario ya dio su email, no lo pidas de vuelta.",
-      "- Respuestas off-topic o sin sentido: si la respuesta del usuario no guarda relacion con la pregunta que acabas de hacer (ej. respondes '¿que mensaje de error ves?' y contesta con algo sin relacion), NO asumas una respuesta ni avances con un paso. Volve a preguntar lo mismo de forma mas simple o clarificando que necesitas. Si despues de 2 intentos el usuario sigue sin colaborar con la info necesaria, deriva con un summary honesto tipo 'usuario reporta X pero no respondio al pedido de detalle necesario para diagnosticar'."
+      "- Respuestas off-topic o sin sentido: si la respuesta del usuario no guarda relacion con la pregunta que acabas de hacer (ej. respondes '¿que mensaje de error ves?' y contesta con algo sin relacion), NO asumas una respuesta ni avances con un paso. Volve a preguntar lo mismo de forma mas simple o clarificando que necesitas. Si despues de 2 intentos el usuario sigue sin colaborar con la info necesaria, deriva con un summary honesto tipo 'usuario reporta X pero no respondio al pedido de detalle necesario para diagnosticar'.",
+      "- Inputs sin sentido: si el mensaje del usuario no se puede relacionar claramente con un problema real de MyKeego (ej. palabras aleatorias, objetos que no tienen relacion con autos o reservas, preguntas absurdas), NO intentes matchear un skill ni respondas con informacion tecnica. Responde con algo como 'No entiendo bien qué necesitás, ¿podés contarme qué te pasa con el auto o la reserva?'"
     ].join("\n"),
     [
       terminalInstruction,
