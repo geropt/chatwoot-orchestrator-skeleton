@@ -14,6 +14,12 @@ export type ConversationTurn = {
   content: string;
 };
 
+export type HandoffSummary = {
+  problem: string;
+  attempted: string | null;
+  reason: string;
+};
+
 export type ConversationState = {
   state: ConversationStateName;
   unknownAttempts: number;
@@ -43,7 +49,8 @@ export type TemplateKey =
   | "FAREWELL"
   | "HANDOFF_HUMAN"
   | "GENERAL_HANDOFF"
-  | "OUT_OF_HOURS_HANDOFF";
+  | "OUT_OF_HOURS_HANDOFF"
+  | "AGENT_TECHNICAL_RETRY";
 
 export type ParsedInput = {
   signal: UserSignal;
@@ -64,5 +71,6 @@ export type FsmDecision = {
   category: ConversationCategory | null;
   addAgentNote: boolean;
   agentSummary: string | null;
+  agentHandoffSummary: HandoffSummary | null;
   priority: ConversationPriority | null;
 };

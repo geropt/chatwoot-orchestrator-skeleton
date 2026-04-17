@@ -14,8 +14,7 @@ ask_email: false
 
 ## Pasos a guiar
 1. Aclarar que actualmente MyKeego no permite alquilar vehículos para trabajar en aplicaciones de transporte de pasajeros ni de mensajería.
-2. Si el parking le queda incómodo, puede reservar un Cabify desde la app de MyKeego para llegar al estacionamiento o trasladarse desde allí.
-3. Mantener tono amable; es una política del servicio.
+2. Mantener tono amable; es una política del servicio.
 
 ## Cuándo derivar a operador
 - Usuario insiste o quiere saber si hay excepciones comerciales.

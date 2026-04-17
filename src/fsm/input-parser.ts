@@ -136,7 +136,7 @@ function matchesAdministrativo(value: string): boolean {
 }
 
 function matchesGeneral(value: string): boolean {
-  return /\b(consulta|consultas|general|pregunta|preguntas|info|informacion|duda|dudas|otra)\b/.test(
+  return /\b(consulta|consultas|general|pregunta|preguntas|info|informacion|informativa|informativo|duda|dudas|otra|averiguar|averiguando|averigua|prospecto|no soy (?:usuario|cliente)|no tengo cuenta)\b/.test(
     value
   );
 }

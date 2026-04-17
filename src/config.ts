@@ -12,6 +12,7 @@ export type AppConfig = {
   agentMaxTokens: number;
   agentHistoryLimit: number;
   agentMaxRetries: number;
+  agentMaxToolIterations: number;
   openrouterBaseUrl: string;
   openrouterApiKey: string;
   openrouterModel: string;
@@ -22,6 +23,7 @@ export type AppConfig = {
   businessStartMinutes: number;
   businessEndMinutes: number;
   businessHoursLabel: string;
+  adminTicketInboxId: number | null;
 };
 
 function required(name: string): string {
@@ -39,6 +41,16 @@ function optional(name: string): string {
 function numberEnv(name: string, fallback: number): number {
   const value = process.env[name];
   if (!value) return fallback;
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`Invalid number in env var ${name}: ${value}`);
+  }
+  return parsed;
+}
+
+function optionalNumber(name: string): number | null {
+  const value = process.env[name];
+  if (!value || !value.trim()) return null;
   const parsed = Number(value);
   if (Number.isNaN(parsed)) {
     throw new Error(`Invalid number in env var ${name}: ${value}`);
@@ -147,11 +159,12 @@ export const config: AppConfig = {
   agentMaxTokens: numberEnv("AGENT_MAX_TOKENS", 320),
   agentHistoryLimit: numberEnv("AGENT_HISTORY_LIMIT", 12),
   agentMaxRetries: numberEnv("AGENT_MAX_RETRIES", 2),
+  agentMaxToolIterations: numberEnv("AGENT_MAX_TOOL_ITERATIONS", 4),
   openrouterBaseUrl:
     optional("OPENROUTER_BASE_URL") || "https://openrouter.ai/api/v1",
   openrouterApiKey,
   openrouterModel,
-  openrouterTimeoutMs: numberEnv("OPENROUTER_TIMEOUT_MS", 8000),
+  openrouterTimeoutMs: numberEnv("OPENROUTER_TIMEOUT_MS", 20000),
   businessHoursEnabled,
   businessTimezone: timezoneEnv(
     "BUSINESS_TIMEZONE",
@@ -161,5 +174,6 @@ export const config: AppConfig = {
   businessStartMinutes: timeToMinutes("BUSINESS_START_TIME", "09:00"),
   businessEndMinutes: timeToMinutes("BUSINESS_END_TIME", "18:00"),
   businessHoursLabel:
-    optional("BUSINESS_HOURS_LABEL") || "lunes a viernes de 09:00 a 18:00"
+    optional("BUSINESS_HOURS_LABEL") || "lunes a viernes de 09:00 a 18:00",
+  adminTicketInboxId: optionalNumber("ADMIN_TICKET_INBOX_ID")
 };

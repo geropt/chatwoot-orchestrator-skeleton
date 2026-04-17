@@ -1,7 +1,7 @@
 ---
 id: luz_tablero_servicio
 title: Luz de service en el tablero
-description: Tranquilizar al usuario si ve la luz de próximo service o distinguirla de una falla real.
+description: indentificar junto al usuario si ve la luz de próximo service o distinguirla de una falla real.
 category: tecnico
 ask_email: false
 ---
@@ -16,7 +16,7 @@ ask_email: false
 - ¿El auto anda con normalidad?
 
 ## Pasos a guiar
-1. Si es la luz de próximo service (llave inglesa / recordatorio): es un aviso preventivo, el auto está en condiciones para circular.
+1. Identificar si es la luz de próximo service (llave inglesa / recordatorio): es un aviso preventivo, el auto está en condiciones para circular. (no dar por asumido)
 2. Aclarar que no indica una falla, solo que se aproxima la fecha del próximo check-in.
 3. Si la luz es de batería, motor, temperatura, aceite, ABS u otra crítica, pedir foto del tablero para confirmar.
 

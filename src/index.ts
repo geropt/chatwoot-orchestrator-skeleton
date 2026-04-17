@@ -1,13 +1,18 @@
 import "dotenv/config";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import rawBody from "fastify-raw-body";
+import { createAdminTicket } from "./admin-ticket.js";
 import { getBusinessHoursStatus } from "./business-hours.js";
 import { ChatwootClient } from "./chatwoot-client.js";
 import { config } from "./config.js";
 import { DedupeStore } from "./dedupe-store.js";
 import { ConversationStateStore } from "./fsm/state-store.js";
 import { renderTemplate } from "./fsm/templates.js";
-import type { ConversationTurn } from "./fsm/types.js";
+import type {
+  ConversationPriority,
+  ConversationTurn,
+  HandoffSummary
+} from "./fsm/types.js";
 import { ConversationOrchestrator } from "./orchestrator/harness.js";
 import { loadSkills } from "./skills/repository.js";
 import { verifyChatwootSignature } from "./signature.js";
@@ -50,7 +55,8 @@ app.log.info(
     businessWorkingDays: config.businessWorkingDays,
     businessStartMinutes: config.businessStartMinutes,
     businessEndMinutes: config.businessEndMinutes,
-    openrouterModel: config.agentEnabled ? config.openrouterModel : "disabled"
+    openrouterModel: config.agentEnabled ? config.openrouterModel : "disabled",
+    adminTicketInboxId: config.adminTicketInboxId ?? "disabled"
   },
   "Orchestrator ready"
 );
@@ -151,7 +157,13 @@ const webhookHandler = async (
 
   const orchestratorResult = await orchestrator.run({
     content,
-    currentState
+    currentState,
+    toolbox: {
+      conversationId,
+      contactId: extractContactId(payload),
+      email: currentState.email,
+      logger: request.log
+    }
   });
   const decision = orchestratorResult.decision;
 
@@ -187,6 +199,8 @@ const webhookHandler = async (
         matchedSkillId: decision.matchedSkillId,
         category: decision.category,
         agentSummary: decision.agentSummary,
+        agentHandoffSummary: decision.agentHandoffSummary,
+        priority: decision.priority,
         history: historyWithUser
       })
     );
@@ -202,6 +216,50 @@ const webhookHandler = async (
     if (decision.priority) {
       await chatwoot.togglePriority(conversationId, decision.priority);
     }
+
+    if (decision.category === "administrativo") {
+      try {
+        const ticketResult = await createAdminTicket({
+          input: {
+            originalConversationId: conversationId,
+            originalDisplayId: payload.conversation?.display_id ?? null,
+            contactId: extractContactId(payload),
+            category: decision.category,
+            problem: decision.problem,
+            matchedSkillId: decision.matchedSkillId,
+            agentSummary: decision.agentSummary,
+            agentHandoffSummary: decision.agentHandoffSummary,
+            priority: decision.priority,
+            stateEmail: decision.email,
+            history: historyWithUser
+          },
+          chatwoot,
+          config,
+          logger: request.log
+        });
+
+        if (ticketResult) {
+          request.log.info(
+            {
+              conversationId,
+              ticketId: ticketResult.ticketId,
+              ticketDisplayId: ticketResult.ticketDisplayId,
+              email: ticketResult.email
+            },
+            "Admin ticket created"
+          );
+        }
+      } catch (err) {
+        request.log.error(
+          {
+            err: err instanceof Error ? err.message : String(err),
+            conversationId
+          },
+          "Failed to create admin ticket"
+        );
+      }
+    }
+
     request.log.info(
       {
         conversationId,
@@ -216,26 +274,31 @@ const webhookHandler = async (
         hasEmail: Boolean(decision.email),
         hasAgentSummary: Boolean(decision.agentSummary),
         priority: decision.priority,
-        inBusinessHours: businessHours?.isOpen ?? null
+        inBusinessHours: businessHours?.isOpen ?? null,
+        agentMetrics: orchestratorResult.trace.agentMetrics
       },
       "Handoff triggered"
     );
   } else {
-    request.log.info(
-      {
-        conversationId,
-        signal: decision.signal,
-        previousState: currentState.state,
-        nextState: decision.nextState,
-        source: orchestratorResult.trace.source,
-        agentAction: orchestratorResult.trace.agentAction,
-        agentError: orchestratorResult.trace.agentError,
-        matchedSkillId: decision.matchedSkillId,
-        category: decision.category,
-        unknownAttempts: decision.unknownAttempts
-      },
-      "Bot replied"
-    );
+    const replyLogPayload = {
+      conversationId,
+      signal: decision.signal,
+      previousState: currentState.state,
+      nextState: decision.nextState,
+      source: orchestratorResult.trace.source,
+      agentAction: orchestratorResult.trace.agentAction,
+      agentError: orchestratorResult.trace.agentError,
+      matchedSkillId: decision.matchedSkillId,
+      category: decision.category,
+      unknownAttempts: decision.unknownAttempts,
+      agentMetrics: orchestratorResult.trace.agentMetrics
+    };
+
+    if (orchestratorResult.trace.agentError) {
+      request.log.warn(replyLogPayload, "Bot replied after agent failure");
+    } else {
+      request.log.info(replyLogPayload, "Bot replied");
+    }
   }
 
   conversationStateStore.set(conversationId, {
@@ -267,6 +330,14 @@ app.post<{ Body: ChatwootWebhookPayload }>(
 const port = config.port;
 await app.listen({ port, host: "0.0.0.0" });
 app.log.info(`Server listening on port ${port}`);
+
+function extractContactId(payload: ChatwootWebhookPayload): number | null {
+  const senderId = payload.sender?.id;
+  if (typeof senderId === "number") return senderId;
+  const inboxContactId = payload.conversation?.contact_inbox?.contact_id;
+  if (typeof inboxContactId === "number") return inboxContactId;
+  return null;
+}
 
 function isIncomingContactMessage(payload: ChatwootWebhookPayload): boolean {
   if (payload.private) return false;
@@ -334,29 +405,78 @@ function buildAgentSummaryNote(params: {
   matchedSkillId: string | null;
   category: string | null;
   agentSummary: string | null;
+  agentHandoffSummary: HandoffSummary | null;
+  priority: ConversationPriority | null;
   history: ConversationTurn[];
 }): string {
-  const email = params.email || "no informado";
-  const problem = params.problem || "sin detalle";
-  const matchedSkillId = params.matchedSkillId || "sin skill";
-  const category = params.category || "sin clasificar";
-  const agentSummary = params.agentSummary || "sin resumen del agente";
+  const lines: string[] = [];
+
+  const banner = priorityBanner(params.priority);
+  if (banner) lines.push(banner);
+  lines.push("Resumen preatencion");
+
+  const detail = params.agentHandoffSummary;
+  if (detail) {
+    lines.push(`• Problema: ${detail.problem}`);
+    if (detail.attempted) lines.push(`• Intentos previos: ${detail.attempted}`);
+    lines.push(`• Motivo de derivacion: ${detail.reason}`);
+  } else if (params.agentSummary) {
+    lines.push(`• Resumen del agente: ${params.agentSummary}`);
+  }
+
+  lines.push(`• Categoria: ${params.category || "sin clasificar"}`);
+  lines.push(`• Email: ${params.email || "no informado"}`);
+  lines.push(`• Skill aplicado: ${formatSkillReference(params.matchedSkillId)}`);
+  lines.push(`• Prioridad: ${params.priority ?? "normal"}`);
+
+  const userTurns = params.history.filter(turn => turn.role === "user").length;
+  const botTurns = params.history.filter(turn => turn.role === "assistant").length;
+  lines.push(
+    `• Turnos: ${params.history.length} (${userTurns} del usuario / ${botTurns} del bot)`
+  );
+
+  const lastBotQuestion = findLastBotQuestion(params.history);
+  if (lastBotQuestion) {
+    lines.push(`• Ultima pregunta del bot sin responder: "${lastBotQuestion}"`);
+  }
+
+  if (params.problem) {
+    lines.push(`• Primer mensaje del usuario: ${params.problem}`);
+  }
 
   const lastUserTurns = params.history
     .filter(turn => turn.role === "user")
     .slice(-3)
-    .map(turn => `  · ${turn.content}`)
+    .map(turn => `   · ${turn.content}`)
     .join("\n");
+  if (lastUserTurns) {
+    lines.push(`• Ultimos mensajes del usuario:\n${lastUserTurns}`);
+  }
 
-  return [
-    "Resumen preatencion:",
-    `- Categoria: ${category}`,
-    `- Email: ${email}`,
-    `- Consulta: ${problem}`,
-    `- Skill sugerida: ${matchedSkillId}`,
-    `- Resumen del agente: ${agentSummary}`,
-    lastUserTurns ? `- Ultimos mensajes del usuario:\n${lastUserTurns}` : ""
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return lines.join("\n");
+}
+
+function priorityBanner(priority: ConversationPriority | null): string | null {
+  if (priority === "urgent") return "🚨 URGENTE - revisar de inmediato";
+  if (priority === "high") return "⚠️ Alta prioridad";
+  return null;
+}
+
+function formatSkillReference(matchedSkillId: string | null): string {
+  if (matchedSkillId) return matchedSkillId;
+  return "ninguno (el bot no encontro match en el catalogo, revisar manualmente)";
+}
+
+function findLastBotQuestion(history: ConversationTurn[]): string | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const turn = history[i];
+    if (turn.role !== "assistant") continue;
+    if (!turn.content.includes("?")) continue;
+    const sentences = turn.content
+      .split(/(?<=\?)/)
+      .map(s => s.trim())
+      .filter(s => s.endsWith("?"));
+    return sentences[sentences.length - 1] ?? null;
+  }
+  return null;
 }

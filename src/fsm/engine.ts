@@ -3,6 +3,7 @@ import type {
   ConversationPriority,
   ConversationState,
   FsmDecision,
+  HandoffSummary,
   TemplateKey,
   UserSignal
 } from "./types.js";
@@ -37,6 +38,7 @@ export function buildReplyDecision(params: {
       params.category === undefined ? params.currentState.category : params.category,
     addAgentNote: false,
     agentSummary: null,
+    agentHandoffSummary: null,
     priority: null
   };
 }
@@ -51,6 +53,7 @@ export function buildHandoffDecision(params: {
   category?: ConversationCategory | null;
   addAgentNote?: boolean;
   agentSummary?: string | null;
+  agentHandoffSummary?: HandoffSummary | null;
   priority?: ConversationPriority | null;
 }): FsmDecision {
   return {
@@ -70,6 +73,7 @@ export function buildHandoffDecision(params: {
       params.category === undefined ? params.currentState.category : params.category,
     addAgentNote: params.addAgentNote ?? true,
     agentSummary: params.agentSummary ?? null,
+    agentHandoffSummary: params.agentHandoffSummary ?? null,
     priority: params.priority ?? null
   };
 }

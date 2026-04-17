@@ -1,6 +1,6 @@
 {
   "version": 4,
-  "generated_at": "2026-04-16T20:04:51.626Z",
+  "generated_at": "2026-04-17T17:35:12.927Z",
   "skills": [
     {
       "id": "auto_no_abre",
@@ -27,11 +27,27 @@
       "enabled": true
     },
     {
+      "id": "club_puntos_beneficios",
+      "file": "club-puntos-beneficios.md",
+      "title": "Club de beneficios y puntos Keego",
+      "description": "Cómo funcionan los puntos, acumulación, canje, referidos y vencimiento.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
       "id": "combustible_limpieza_unidad",
       "file": "combustible-limpieza-unidad.md",
       "title": "Combustible o limpieza de la unidad",
       "description": "Consultas y reportes sobre combustible, tanque y limpieza del auto.",
       "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "compartir_reserva",
+      "file": "compartir-reserva.md",
+      "title": "Compartir reserva (cost sharing)",
+      "description": "Cómo funciona el feature de compartir reserva con otros usuarios, responsabilidades y restricciones.",
+      "category": "administrativo",
       "enabled": true
     },
     {
@@ -83,6 +99,14 @@
       "enabled": true
     },
     {
+      "id": "finalizacion_alquiler",
+      "file": "finalizacion-alquiler.md",
+      "title": "Finalización y devolución del vehículo",
+      "description": "Cómo finalizar correctamente un alquiler, dónde estacionar, qué hacer si no se puede cerrar el contrato.",
+      "category": "tecnico",
+      "enabled": true
+    },
+    {
       "id": "franquicia_seguro",
       "file": "franquicia-seguro.md",
       "title": "Franquicia y cobertura del seguro",
@@ -94,8 +118,16 @@
       "id": "luz_tablero_servicio",
       "file": "luz-tablero-servicio.md",
       "title": "Luz de service en el tablero",
-      "description": "Tranquilizar al usuario si ve la luz de próximo service o distinguirla de una falla real.",
+      "description": "indentificar junto al usuario si ve la luz de próximo service o distinguirla de una falla real.",
       "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "multas_transito",
+      "file": "multas-transito.md",
+      "title": "Multas de tránsito y responsabilidad",
+      "description": "Quién paga las multas, cómo se procesan y qué pasa con las infracciones durante el alquiler.",
+      "category": "administrativo",
       "enabled": true
     },
     {
@@ -103,6 +135,14 @@
       "file": "peajes-telepase.md",
       "title": "Peajes y telepase",
       "description": "Cómo se cobran los peajes durante una reserva y uso del telepase del vehículo.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "privacidad_datos_personales",
+      "file": "privacidad-datos-personales.md",
+      "title": "Privacidad y datos personales",
+      "description": "Qué datos recopila MyKeego, cómo se usan, derechos del titular y cómo ejercerlos.",
       "category": "administrativo",
       "enabled": true
     },
@@ -139,6 +179,14 @@
       "enabled": true
     },
     {
+      "id": "saldo_creditos_minutos",
+      "file": "saldo-creditos-minutos.md",
+      "title": "Saldo, créditos y minutos gratis",
+      "description": "Cómo funciona el saldo en la cuenta, dónde aplican los créditos, vencimiento y acreditación.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
       "id": "socios_aca_cupon",
       "file": "socios-aca-cupon.md",
       "title": "Cupón de descuento para socios ACA",
@@ -151,6 +199,22 @@
       "file": "trabajo-apps-rideshare.md",
       "title": "Uso para apps de transporte o mensajería",
       "description": "Política sobre uso de los vehículos en aplicaciones de transporte de pasajeros o mensajería.",
+      "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "uso_prohibido_restricciones",
+      "file": "uso-prohibido-restricciones.md",
+      "title": "Usos prohibidos y restricciones del vehículo",
+      "description": "Qué está prohibido hacer con el vehículo: alcohol, animales, fumar, viajes al exterior, off-road, etc.",
+      "category": "general",
+      "enabled": true
+    },
+    {
+      "id": "zona_operativa",
+      "file": "zona-operativa.md",
+      "title": "Zona operativa y reubicación del vehículo",
+      "description": "Qué es la zona operativa, qué pasa si el vehículo queda fuera y costos de reubicación.",
       "category": "administrativo",
       "enabled": true
     }

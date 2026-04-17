@@ -1,6 +1,11 @@
 import type { AppConfig } from "../config.js";
-import type { AgentAction } from "../agent/conversational-agent.js";
+import type {
+  AgentAction,
+  AgentRunMetrics
+} from "../agent/conversational-agent.js";
 import { runAgentTurn } from "../agent/conversational-agent.js";
+import type { ToolRegistry, ToolboxContext } from "../agent/tools.js";
+import { createDefaultToolRegistry } from "../agent/tools.js";
 import {
   buildFarewellDecision,
   buildHandoffDecision,
@@ -18,6 +23,7 @@ import type { LoadedSkill } from "../skills/types.js";
 export type OrchestratorInput = {
   content: string;
   currentState: ConversationState;
+  toolbox: ToolboxContext;
 };
 
 export type OrchestratorSource =
@@ -42,6 +48,7 @@ export type OrchestratorTrace = {
   agentError: string | null;
   matchedSkillId: string | null;
   category: ConversationCategory | null;
+  agentMetrics: AgentRunMetrics | null;
 };
 
 export type OrchestratorResult = {
@@ -50,10 +57,15 @@ export type OrchestratorResult = {
 };
 
 export class ConversationOrchestrator {
+  private readonly registry: ToolRegistry;
+
   constructor(
     private readonly config: AppConfig,
-    private readonly skills: LoadedSkill[]
-  ) {}
+    private readonly skills: LoadedSkill[],
+    registry?: ToolRegistry
+  ) {
+    this.registry = registry ?? createDefaultToolRegistry();
+  }
 
   async run(input: OrchestratorInput): Promise<OrchestratorResult> {
     const parsed = parseInput(input.content);
@@ -126,24 +138,6 @@ export class ConversationOrchestrator {
     input: OrchestratorInput,
     parsed: ParsedInput
   ): Promise<OrchestratorResult> {
-    if (parsed.signal === "category" && parsed.category === "general") {
-      return {
-        decision: buildHandoffDecision({
-          currentState: input.currentState,
-          signal: parsed.signal,
-          replyKey: "GENERAL_HANDOFF",
-          replyText: null,
-          problem: input.currentState.problem ?? "consulta general",
-          category: "general",
-          addAgentNote: true
-        }),
-        trace: baseTrace("general_handoff", {
-          ...input.currentState,
-          category: "general"
-        })
-      };
-    }
-
     if (parsed.signal === "category" && parsed.category) {
       const category = parsed.category;
       const followUp = categoryFollowUpText(category);
@@ -162,7 +156,8 @@ export class ConversationOrchestrator {
           agentAction: null,
           agentError: null,
           matchedSkillId: null,
-          category
+          category,
+          agentMetrics: null
         }
       };
     }
@@ -192,7 +187,7 @@ export class ConversationOrchestrator {
         problem: input.currentState.problem ?? input.content.trim(),
         category: null
       };
-      return this.runAgentWithState(promoted, parsed, input.content);
+      return this.runAgentWithState(promoted, parsed, input.content, input.toolbox);
     }
 
     return this.buildUnknownRetry(input.currentState, parsed, {
@@ -212,7 +207,7 @@ export class ConversationOrchestrator {
       problem: input.currentState.problem ?? input.content.trim()
     };
 
-    return this.runAgentWithState(nextState, parsed, input.content);
+    return this.runAgentWithState(nextState, parsed, input.content, input.toolbox);
   }
 
   private async handleAwaitingEmail(
@@ -225,7 +220,12 @@ export class ConversationOrchestrator {
         state: "agent_active",
         email: parsed.email
       };
-      const agentResult = await this.runAgentWithState(updated, parsed, input.content);
+      const agentResult = await this.runAgentWithState(
+        updated,
+        parsed,
+        input.content,
+        input.toolbox
+      );
       return {
         decision: agentResult.decision,
         trace: { ...agentResult.trace, source: "email_captured" }
@@ -251,7 +251,7 @@ export class ConversationOrchestrator {
         ...input.currentState,
         state: "agent_active"
       };
-      return this.runAgentWithState(updated, parsed, input.content);
+      return this.runAgentWithState(updated, parsed, input.content, input.toolbox);
     }
 
     return this.buildUnknownRetry(input.currentState, parsed, {
@@ -264,7 +264,8 @@ export class ConversationOrchestrator {
   private async runAgentWithState(
     state: ConversationState,
     parsed: ParsedInput,
-    rawContent: string
+    rawContent: string,
+    toolbox: ToolboxContext
   ): Promise<OrchestratorResult> {
     if (!this.config.agentEnabled) {
       return {
@@ -289,10 +290,13 @@ export class ConversationOrchestrator {
         category: state.category,
         email: state.email,
         history: state.history,
-        state: state.state
+        state: state.state,
+        matchedSkillId: state.matchedSkillId
       },
       skills: this.skills,
-      config: this.config
+      config: this.config,
+      toolbox,
+      registry: this.registry
     });
 
     if (agentResult.action) {
@@ -300,7 +304,8 @@ export class ConversationOrchestrator {
         action: agentResult.action,
         state,
         parsed,
-        rawContent
+        rawContent,
+        metrics: agentResult.metrics
       });
     }
 
@@ -320,17 +325,21 @@ export class ConversationOrchestrator {
         }),
         trace: {
           ...baseTrace("agent_fallback", state),
-          agentError: agentResult.error
+          agentError: agentResult.error,
+          agentMetrics: agentResult.metrics
         }
       };
     }
 
+    const isTechnicalFailure = isTechnicalAgentError(agentResult.error);
+
     return {
       decision: buildReplyDecision({
         currentState: state,
-        replyKey: null,
-        replyText:
-          "Perdón, no te entendí bien. ¿Podés contarme un poco más sobre lo que te pasa?",
+        replyKey: isTechnicalFailure ? "AGENT_TECHNICAL_RETRY" : null,
+        replyText: isTechnicalFailure
+          ? null
+          : "Perdón, no te entendí bien. ¿Podés contarme un poco más sobre lo que te pasa?",
         nextState: "agent_active",
         signal: parsed.signal,
         unknownAttempts: nextUnknown,
@@ -339,7 +348,8 @@ export class ConversationOrchestrator {
       }),
       trace: {
         ...baseTrace("agent_retry", state),
-        agentError: agentResult.error
+        agentError: agentResult.error,
+        agentMetrics: agentResult.metrics
       }
     };
   }
@@ -387,10 +397,12 @@ function translateAgentAction(params: {
   state: ConversationState;
   parsed: ParsedInput;
   rawContent: string;
+  metrics: AgentRunMetrics;
 }): OrchestratorResult {
-  const { action, state, parsed, rawContent } = params;
+  const { action, state, parsed, rawContent, metrics } = params;
   const matchedSkillId = action.matchedSkillId ?? state.matchedSkillId;
   const problem = state.problem ?? rawContent.trim();
+  const effectiveCategory = action.categoryChange ?? state.category;
 
   switch (action.kind) {
     case "reply":
@@ -402,7 +414,7 @@ function translateAgentAction(params: {
           nextState: "agent_active",
           signal: parsed.signal,
           unknownAttempts: 0,
-          category: state.category,
+          category: effectiveCategory,
           problem,
           matchedSkillId
         }),
@@ -411,7 +423,8 @@ function translateAgentAction(params: {
           agentAction: "reply",
           agentError: null,
           matchedSkillId,
-          category: state.category
+          category: effectiveCategory,
+          agentMetrics: metrics
         }
       };
 
@@ -424,7 +437,7 @@ function translateAgentAction(params: {
           nextState: "awaiting_email",
           signal: parsed.signal,
           unknownAttempts: 0,
-          category: state.category,
+          category: effectiveCategory,
           problem,
           matchedSkillId
         }),
@@ -433,7 +446,8 @@ function translateAgentAction(params: {
           agentAction: "ask_email",
           agentError: null,
           matchedSkillId,
-          category: state.category
+          category: effectiveCategory,
+          agentMetrics: metrics
         }
       };
 
@@ -455,7 +469,8 @@ function translateAgentAction(params: {
           agentAction: "resolve",
           agentError: null,
           matchedSkillId,
-          category: state.category
+          category: state.category,
+          agentMetrics: metrics
         }
       };
 
@@ -471,6 +486,7 @@ function translateAgentAction(params: {
           category: state.category,
           addAgentNote: true,
           agentSummary: action.summary,
+          agentHandoffSummary: action.handoffSummary,
           priority: action.priority
         }),
         trace: {
@@ -478,7 +494,8 @@ function translateAgentAction(params: {
           agentAction: "handoff",
           agentError: null,
           matchedSkillId,
-          category: state.category
+          category: state.category,
+          agentMetrics: metrics
         }
       };
   }
@@ -503,6 +520,18 @@ function baseTrace(
     agentAction: null,
     agentError: null,
     matchedSkillId: state.matchedSkillId,
-    category: state.category
+    category: state.category,
+    agentMetrics: null
   };
+}
+
+function isTechnicalAgentError(error: string | null): boolean {
+  if (!error) return false;
+  return (
+    error.startsWith("agent_exception:") ||
+    error.startsWith("openrouter_") ||
+    error === "agent_max_iterations" ||
+    error === "agent_no_tool_call" ||
+    error === "agent_invalid_action"
+  );
 }

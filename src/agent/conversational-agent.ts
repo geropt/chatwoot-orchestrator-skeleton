@@ -1,22 +1,21 @@
 import type { AppConfig } from "../config.js";
-import { isConversationPriority } from "../fsm/engine.js";
 import type {
   ConversationCategory,
-  ConversationPriority,
   ConversationStateName,
   ConversationTurn
 } from "../fsm/types.js";
 import type { LoadedSkill } from "../skills/types.js";
+import {
+  createDefaultToolRegistry,
+  type AgentAction,
+  type AgentActionKind,
+  type EffectToolDef,
+  type TerminalToolDef,
+  type ToolboxContext,
+  type ToolRegistry
+} from "./tools.js";
 
-export type AgentActionKind = "reply" | "ask_email" | "resolve" | "handoff";
-
-export type AgentAction = {
-  kind: AgentActionKind;
-  text: string;
-  summary: string | null;
-  matchedSkillId: string | null;
-  priority: ConversationPriority | null;
-};
+export type { AgentAction, AgentActionKind } from "./tools.js";
 
 export type AgentContext = {
   content: string;
@@ -24,23 +23,80 @@ export type AgentContext = {
   email: string | null;
   history: ConversationTurn[];
   state: ConversationStateName;
+  matchedSkillId: string | null;
+};
+
+export type AgentRunMetrics = {
+  llmDurationMs: number;
+  llmIterations: number;
+  systemPromptChars: number;
+  historyLen: number;
 };
 
 export type AgentRunResult = {
   action: AgentAction | null;
   error: string | null;
   usedFallback: boolean;
+  metrics: AgentRunMetrics;
 };
+
+type LlmToolCall = {
+  id: string;
+  name: string;
+  arguments: string;
+};
+
+type LlmAssistantMessage = {
+  role: "assistant";
+  content: string | null;
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
+};
+
+type LlmToolMessage = {
+  role: "tool";
+  tool_call_id: string;
+  content: string;
+};
+
+type LlmMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string }
+  | LlmAssistantMessage
+  | LlmToolMessage;
 
 export async function runAgentTurn(params: {
   context: AgentContext;
   skills: LoadedSkill[];
   config: AppConfig;
+  toolbox: ToolboxContext;
+  registry?: ToolRegistry;
 }): Promise<AgentRunResult> {
-  const { context, skills, config } = params;
+  const { context, skills, config, toolbox } = params;
+  const registry = params.registry ?? createDefaultToolRegistry();
+
+  const historyMessages = buildHistoryMessages(
+    context.history,
+    config.agentHistoryLimit
+  );
+  const emptyMetrics: AgentRunMetrics = {
+    llmDurationMs: 0,
+    llmIterations: 0,
+    systemPromptChars: 0,
+    historyLen: historyMessages.length
+  };
 
   if (!config.agentEnabled) {
-    return { action: null, error: "agent_disabled", usedFallback: false };
+    return {
+      action: null,
+      error: "agent_disabled",
+      usedFallback: false,
+      metrics: emptyMetrics
+    };
   }
 
   const relevantSkills = filterSkillsByCategory(skills, context.category);
@@ -48,16 +104,127 @@ export async function runAgentTurn(params: {
     category: context.category,
     email: context.email,
     state: context.state,
-    skills: relevantSkills
+    skills: relevantSkills,
+    matchedSkillId: context.matchedSkillId,
+    effectTools: registry.effects()
   });
-  const messages = [
-    { role: "system" as const, content: systemPrompt },
-    ...buildHistoryMessages(context.history, config.agentHistoryLimit),
-    { role: "user" as const, content: context.content }
+
+  const messages: LlmMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...historyMessages,
+    { role: "user", content: context.content }
   ];
 
+  const metrics: AgentRunMetrics = {
+    llmDurationMs: 0,
+    llmIterations: 0,
+    systemPromptChars: systemPrompt.length,
+    historyLen: historyMessages.length
+  };
+
+  const maxIterations = Math.max(1, config.agentMaxToolIterations);
+
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
+    const startedAt = Date.now();
+    const response = await callOpenRouter({ messages, config, registry });
+    metrics.llmDurationMs += Date.now() - startedAt;
+    metrics.llmIterations += 1;
+
+    if (response.error) {
+      return {
+        action: null,
+        error: response.error,
+        usedFallback: false,
+        metrics
+      };
+    }
+
+    const toolCalls = response.toolCalls;
+    if (!toolCalls.length) {
+      return {
+        action: null,
+        error: "agent_no_tool_call",
+        usedFallback: false,
+        metrics
+      };
+    }
+
+    const terminalCall = toolCalls.find(call => {
+      const def = registry.get(call.name);
+      return def?.kind === "terminal";
+    });
+
+    if (terminalCall) {
+      const def = registry.get(terminalCall.name) as TerminalToolDef;
+      const args = parseToolArgs(terminalCall.arguments);
+      if (!args) {
+        return {
+          action: null,
+          error: "agent_invalid_action",
+          usedFallback: false,
+          metrics
+        };
+      }
+      const action = def.toAction(args, relevantSkills);
+      if (!action) {
+        return {
+          action: null,
+          error: "agent_invalid_action",
+          usedFallback: false,
+          metrics
+        };
+      }
+      return { action, error: null, usedFallback: false, metrics };
+    }
+
+    messages.push({
+      role: "assistant",
+      content: null,
+      tool_calls: toolCalls.map(call => ({
+        id: call.id,
+        type: "function" as const,
+        function: { name: call.name, arguments: call.arguments }
+      }))
+    });
+
+    for (const call of toolCalls) {
+      const def = registry.get(call.name);
+      const toolResponse = await executeEffectTool({
+        call,
+        def,
+        toolbox,
+        timeoutMs: config.openrouterTimeoutMs
+      });
+      messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: toolResponse
+      });
+    }
+  }
+
+  return {
+    action: null,
+    error: "agent_max_iterations",
+    usedFallback: false,
+    metrics
+  };
+}
+
+async function callOpenRouter(params: {
+  messages: LlmMessage[];
+  config: AppConfig;
+  registry: ToolRegistry;
+}): Promise<{
+  toolCalls: LlmToolCall[];
+  error: string | null;
+}> {
+  const { messages, config, registry } = params;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.openrouterTimeoutMs);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    config.openrouterTimeoutMs
+  );
 
   try {
     const response = await fetch(`${config.openrouterBaseUrl}/chat/completions`, {
@@ -70,7 +237,8 @@ export async function runAgentTurn(params: {
         model: config.openrouterModel,
         temperature: config.agentTemperature,
         max_tokens: config.agentMaxTokens,
-        response_format: { type: "json_object" },
+        tools: registry.schemas(),
+        tool_choice: "required",
         messages
       }),
       signal: controller.signal
@@ -79,40 +247,125 @@ export async function runAgentTurn(params: {
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       return {
-        action: null,
-        error: `openrouter_${response.status}:${body.slice(0, 200)}`,
-        usedFallback: false
+        toolCalls: [],
+        error: `openrouter_${response.status}:${body.slice(0, 200)}`
       };
     }
 
     const body = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        message?: {
+          tool_calls?: Array<{
+            id?: string;
+            function?: { name?: string; arguments?: string };
+          }>;
+        };
+      }>;
     };
-    const raw = body.choices?.[0]?.message?.content ?? "";
-    const parsed = parseAgentJson(raw);
-    if (!parsed) {
-      return { action: null, error: "agent_parse_error", usedFallback: false };
+
+    const rawCalls = body.choices?.[0]?.message?.tool_calls ?? [];
+    const toolCalls: LlmToolCall[] = [];
+    for (const raw of rawCalls) {
+      const name = raw.function?.name;
+      const args = raw.function?.arguments;
+      if (typeof name !== "string" || typeof args !== "string") continue;
+      toolCalls.push({
+        id: raw.id ?? `call_${toolCalls.length}`,
+        name,
+        arguments: args
+      });
     }
 
-    const action = normalizeAction(parsed, relevantSkills);
-    if (!action) {
-      return { action: null, error: "agent_invalid_action", usedFallback: false };
-    }
-
-    return { action, error: null, usedFallback: false };
+    return { toolCalls, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown_error";
-    return { action: null, error: `agent_exception:${message}`, usedFallback: false };
+    return { toolCalls: [], error: `agent_exception:${message}` };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function executeEffectTool(params: {
+  call: LlmToolCall;
+  def: ReturnType<ToolRegistry["get"]>;
+  toolbox: ToolboxContext;
+  timeoutMs: number;
+}): Promise<string> {
+  const { call, def, toolbox, timeoutMs } = params;
+
+  if (!def) {
+    toolbox.logger.warn(
+      { toolName: call.name },
+      "Agent called unknown tool"
+    );
+    return JSON.stringify({ ok: false, error: "unknown_tool" });
+  }
+
+  if (def.kind !== "effect") {
+    return JSON.stringify({
+      ok: false,
+      error: "terminal_tool_cannot_be_executed_as_effect"
+    });
+  }
+
+  const args = parseToolArgs(call.arguments);
+  if (!args) {
+    return JSON.stringify({ ok: false, error: "invalid_arguments" });
+  }
+
+  const startedAt = Date.now();
+  try {
+    const result = await withTimeout(def.run(args, toolbox), timeoutMs);
+    toolbox.logger.info(
+      {
+        toolName: def.name,
+        durationMs: Date.now() - startedAt,
+        ok: result.ok
+      },
+      "Agent effect tool executed"
+    );
+    return typeof result.content === "string"
+      ? result.content
+      : JSON.stringify(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "tool_error";
+    toolbox.logger.error(
+      {
+        toolName: def.name,
+        durationMs: Date.now() - startedAt,
+        error: message
+      },
+      "Agent effect tool failed"
+    );
+    return JSON.stringify({ ok: false, error: message });
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  if (timeoutMs <= 0) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`tool_timeout_${timeoutMs}ms`)),
+      timeoutMs
+    );
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      err => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
 }
 
 function filterSkillsByCategory(
   skills: LoadedSkill[],
   category: ConversationCategory | null
 ): LoadedSkill[] {
-  if (category === "general") return [];
+  if (category === "general") return skills;
   if (category === null) {
     return skills.filter(skill => skill.category !== "general");
   }
@@ -126,79 +379,162 @@ function buildSystemPrompt(params: {
   email: string | null;
   state: ConversationStateName;
   skills: LoadedSkill[];
+  matchedSkillId: string | null;
+  effectTools: EffectToolDef[];
 }): string {
-  const { category, email, state, skills } = params;
+  const { category, email, state, skills, matchedSkillId, effectTools } = params;
+
+  const expandedSkill =
+    matchedSkillId != null
+      ? (skills.find(s => s.id === matchedSkillId) ?? null)
+      : null;
 
   const catalog = skills.length
-    ? skills.map(formatSkillForPrompt).join("\n\n")
+    ? skills
+        .map(skill =>
+          skill.id === expandedSkill?.id
+            ? formatSkillExpanded(skill)
+            : formatSkillCompact(skill)
+        )
+        .join("\n\n")
     : "(no hay skills especificos para esta categoria)";
 
   const knownData = [
     `- categoria: ${category ?? "sin clasificar (el usuario todavia no eligio)"}`,
     `- email del usuario: ${email ?? "no informado"}`,
-    `- estado actual: ${state}`
+    `- estado actual: ${state}`,
+    `- skill activo: ${expandedSkill ? expandedSkill.id : "ninguno todavia"}`
   ].join("\n");
 
+  const terminalInstruction = effectTools.length
+    ? "En cada turno el ultimo paso es elegir UNA tool terminal:"
+    : "En cada turno elegi UNA tool:";
+
+  const sections: string[] = [
+    [
+      "Rol: sos el asistente virtual de soporte de MyKeego (car sharing en Argentina). Atendes por WhatsApp.",
+      "Tono: natural, cercano, rioplatense, sin sonar robotico. Sin emojis. Mensajes breves (1-3 oraciones).",
+      "Objetivo: acompañar al usuario paso a paso para resolver lo que se pueda. Derivar a humano solo cuando el skill lo indica, cuando ya se intento y no funciono, o ante una emergencia real."
+    ].join("\n"),
+    buildUserModeSection(category),
+    [
+      "Como usar el catalogo de skills:",
+      "- Los skills aparecen en modo compacto (id, titulo, descripcion, cuando aplica). El skill activo aparece expandido con 'preguntas diagnosticas', 'pasos', 'cuando derivar' y 'restricciones'.",
+      "1. Si aun no hay skill activo: identifica cual matchea segun 'cuando aplica' y el titulo, seteá `matched_skill_id` con su id y hace una primera pregunta diagnostica breve o pedí un detalle concreto para confirmar. En el proximo turno vas a ver los pasos completos del skill elegido.",
+      "2. Si ya hay skill activo: guia al usuario por los 'pasos' del skill (de a uno o dos por mensaje, no vomites la lista entera) y despues de cada paso verifica si funciono antes de pasar al siguiente.",
+      "3. Si se cumple un criterio de 'cuando derivar' del skill activo, hace handoff con summary.",
+      "4. Si el contexto deja claro que el skill activo ya no aplica, cambia `matched_skill_id` al que corresponda (o null) y volve al punto 1.",
+      "5. Si ningun skill encaja con lo que el usuario reporta, NO improvises pasos de resolucion. Pedi UN detalle concreto (que mensaje aparece, en que pantalla se traba, que estaba intentando hacer) para ver si eso te permite matchear un skill. Si con ese detalle sigue sin haber skill que aplique y no es emergencia, deriva a operador con summary claro."
+    ].join("\n"),
+    [
+      "Reglas duras:",
+      "- Solo hablas de temas relacionados a MyKeego y el servicio de car sharing en Argentina.",
+      "- Emergencia real (accidente con lesion, choque, incendio, robo en curso): handoff inmediato.",
+      "- Si no hay skill del catalogo que cubra lo que pregunta el usuario, NO respondas con informacion sustantiva sobre MyKeego aunque creas saberla. Esto incluye: politicas (fumar, mascotas, niños, kilometros, combustible, multas), precios, tarifas, zonas de cobertura, tipos de vehiculo, promociones, tutorial de como funciona el servicio, requisitos generales no listados en un skill. En esos casos: o pedis un detalle concreto para ver si cae en un skill, o derivas a operador con summary tipo 'usuario consulta X, fuera de catalogo de skills'.",
+      "- No inventes politicas, precios, plazos, datos de la cuenta, NI sintomas, errores o diagnosticos que el usuario no haya mencionado explicitamente. Trabaja solo con lo que el usuario efectivamente dijo.",
+      "- No prometas reembolsos, desbloqueos ni compensaciones; eso lo decide un humano.",
+      "- Si ya diste un paso y el usuario dice que no funciono, pasa al siguiente paso del skill o deriva si ya se agotaron.",
+      "- Si el usuario ya dio su email, no lo pidas de vuelta.",
+      "- Respuestas off-topic o sin sentido: si la respuesta del usuario no guarda relacion con la pregunta que acabas de hacer (ej. respondes '¿que mensaje de error ves?' y contesta con algo sin relacion), NO asumas una respuesta ni avances con un paso. Volve a preguntar lo mismo de forma mas simple o clarificando que necesitas. Si despues de 2 intentos el usuario sigue sin colaborar con la info necesaria, deriva con un summary honesto tipo 'usuario reporta X pero no respondio al pedido de detalle necesario para diagnosticar'."
+    ].join("\n"),
+    [
+      terminalInstruction,
+      "- reply: seguir conversando (preguntar, guiar un paso, verificar si funciono).",
+      "- ask_email: pedir el email del usuario (solo aplica a usuarios registrados en categoria tecnico o administrativo; NUNCA para consulta informativa).",
+      "- resolve: cerrar la conversacion (el usuario confirmo que se resolvio o se despidio bien).",
+      "- handoff: derivar a humano (no podes resolverlo o es una emergencia)."
+    ].join("\n")
+  ];
+
+  if (effectTools.length) {
+    const effectLines = [
+      "Herramientas de consulta disponibles (se pueden llamar antes de una tool terminal):"
+    ];
+    for (const tool of effectTools) {
+      effectLines.push(`- ${tool.name}: ${tool.schema.function.description}`);
+      if (tool.promptHint) {
+        effectLines.push(`  hint: ${tool.promptHint}`);
+      }
+    }
+    effectLines.push(
+      "Si llamas a una herramienta de consulta, vas a recibir su resultado y despues elegis la tool terminal."
+    );
+    sections.push(effectLines.join("\n"));
+  }
+
+  sections.push(
+    [
+      "Como redactar `text` (siempre va al usuario por WhatsApp):",
+      "- Segunda persona (vos/te/tu). Nunca en tercera.",
+      "- No describas al usuario ni a vos mismo desde afuera.",
+      '- Correcto en handoff: "Te paso con un operador para que te ayude con la consulta."',
+      '- INCORRECTO: "El usuario informa que X" o "Derivo a un operador".'
+    ].join("\n"),
+    [
+      "Como redactar la nota interna del handoff (parametros `summary_problem`, `summary_attempted`, `summary_reason`):",
+      "- Es para el operador humano que recibe el caso. Tercera persona, sin saludos, sin emojis.",
+      "- `summary_problem` (obligatorio): que reporta el usuario en concreto, en 1 oracion. Ej: 'Reporta que el auto no abre desde la app aunque la reserva figura activa'.",
+      "- `summary_attempted` (opcional, null si no se intento nada): que pasos se le guiaron y resultado. Ej: 'Se le pidio reiniciar la app y verificar senal; ambos pasos sin exito'. Null si no llegamos a guiar nada (ej. emergencia, fuera de catalogo, usuario pidio humano de entrada).",
+      "- `summary_reason` (obligatorio): por que se deriva ahora, en 1 oracion. Opciones tipicas: 'Pasos del skill agotados', 'Emergencia con riesgo a personas', 'Usuario solicita hablar con humano', 'Consulta fuera del catalogo de skills', 'Usuario reporta bloqueo administrativo que requiere accion del operador'."
+    ].join("\n"),
+    "`matched_skill_id`: id del skill que estas aplicando este turno. Null si ninguno encaja.",
+    "`category_change` (opcional, solo en `reply` y `ask_email`): usar SOLO cuando el usuario revela que su intent real no coincide con la categoria actual (ej. entro como informativa pero resulta ser cliente con un problema). Pasar 'tecnico' / 'administrativo' / 'general' segun donde deberia estar. En el resto de los turnos, dejar ausente o null.",
+    [
+      "`priority` (solo tiene efecto en handoff):",
+      '- "urgent": emergencia real con riesgo a personas (accidente con lesion, choque, incendio, robo en curso, auto parado en lugar peligroso).',
+      '- "high": caso sensible que bloquea al usuario y necesita atencion rapida (auxilio mecanico en ruta sin lesiones, auto no abre con reserva activa, cobro erroneo urgente).',
+      "- null: caso administrativo o consulta comun sin urgencia."
+    ].join("\n"),
+    ["Datos conocidos:", knownData].join("\n"),
+    ["Catalogo de skills para esta categoria:", catalog].join("\n")
+  );
+
+  return sections.join("\n\n");
+}
+
+function buildUserModeSection(category: ConversationCategory | null): string {
+  if (category === "general") {
+    return [
+      "Modo del usuario: CONSULTA INFORMATIVA (prospect, todavia no es cliente).",
+      "- NO le pidas email ni uses la tool `ask_email`. No tiene cuenta.",
+      "- Respondé de forma EXPLICATIVA segun el skill que aplique (tipo 'para X se necesita Y, se hace asi Z'), no guies paso a paso como si tuviera el problema ahora.",
+      "- NO derives a operador por defecto. Solo hace handoff si el usuario lo pide explicitamente, si pregunta algo comercial/financiero especifico que un humano deberia responder, o si la consulta esta fuera del catalogo de skills.",
+      "- Si la pregunta no esta cubierta por ningun skill, decile que no tenes esa informacion a mano y pregunta si quiere que lo derives a un operador.",
+      "- ESCAPE A FLUJO CLIENTE: si el usuario describe un problema concreto que esta viviendo ahora (ej. 'no me abre el auto', 'me cobraron mal', 'no carga la app', 'mi reserva no aparece'), no sigas en modo prospect a ciegas. Primero, en una `reply` breve, preguntá: '¿tenés una reserva activa con MyKeego ahora?'. Si te confirma que si, en tu PROXIMA respuesta usá `category_change` con 'tecnico' (problemas con app/auto/reserva) o 'administrativo' (cobros/cuenta/documentacion) segun corresponda, junto con `ask_email` para pedirle el email. A partir de ese turno la conversacion pasa a modo cliente y vos seguis con el skill paso a paso. Si te dice que no es cliente, segui en modo prospect explicativo."
+    ].join("\n");
+  }
+  if (category === "tecnico" || category === "administrativo") {
+    return [
+      `Modo del usuario: CLIENTE REGISTRADO (categoria ${category}).`,
+      "- Si todavia no tenemos su email, ANTES de arrancar con diagnostico o pasos llamá a `ask_email` para pedirle el email con el que se registro en MyKeego. Sin ese dato, no avances.",
+      "- Una vez que tengas el email (o si ya lo teniamos), guia paso a paso segun el skill, verificando despues de cada paso si funciono.",
+      "- Usa los pasos del skill activo tal como estan. Si el usuario se queda bloqueado, deriva con summary."
+    ].join("\n");
+  }
   return [
-    "Rol: sos el asistente virtual de soporte de MyKeego (car sharing en Argentina). Atendes por WhatsApp.",
-    "Tono: natural, cercano, rioplatense, sin sonar robotico. Sin emojis. Mensajes breves (1-3 oraciones).",
-    "Objetivo: acompañar al usuario paso a paso para resolver lo que se pueda. Derivar a humano solo cuando el skill lo indica, cuando ya se intento y no funciono, o ante una emergencia real.",
-    "",
-    "Como usar el catalogo de skills:",
-    "1. Identifica el skill que matchea (mira 'cuando aplica' y el titulo).",
-    "2. Si hay 'preguntas diagnosticas' y todavia te falta contexto, hace UNA sola pregunta (no todas juntas) para entender el caso.",
-    "3. Con contexto suficiente, guia al usuario por los 'pasos' del skill (de a uno o dos por mensaje; no vomites la lista entera).",
-    "4. Despues de un paso, verifica si funciono antes de pasar al siguiente.",
-    "5. Si se cumple un criterio de 'cuando derivar' del skill, hace handoff con summary.",
-    "6. Si ningun skill encaja, podes hacer preguntas basicas de sentido comun (sin inventar procedimientos especificos) antes de decidir si derivar.",
-    "",
-    "Reglas duras:",
-    "- Emergencia real (accidente con lesion, choque, incendio, robo en curso): handoff inmediato.",
-    "- No inventes politicas, precios, plazos ni datos de la cuenta.",
-    "- No prometas reembolsos, desbloqueos ni compensaciones; eso lo decide un humano.",
-    "- Si ya diste un paso y el usuario dice que no funciono, pasa al siguiente paso del skill o deriva si ya se agotaron.",
-    "- Si el usuario ya dio su email, no lo pidas de vuelta.",
-    "",
-    "Acciones disponibles (elegi UNA por turno):",
-    "- reply: seguis conversando. Usala para preguntar, guiar un paso, o verificar si funciono.",
-    "- ask_email: pedile el email (solo si el skill lo requiere y todavia no lo tenes).",
-    "- resolve: el usuario confirmo que se resolvio o se despidio bien. Despedite breve.",
-    "- handoff: no podes resolverlo. Avisale al usuario y dejale un summary al operador.",
-    "",
-    "Formato de salida: JSON estricto, sin texto antes o despues. Estructura:",
-    '{ "action": "reply" | "ask_email" | "resolve" | "handoff", "text": "...", "summary": "..." | null, "matched_skill_id": "..." | null, "priority": "urgent" | "high" | null }',
-    "",
-    'Campo "text" (OBLIGATORIO, siempre va al usuario por WhatsApp):',
-    "- Le hablas al usuario en SEGUNDA persona (vos/te/tu). Nunca en tercera.",
-    "- No describas al usuario ni a vos mismo desde afuera.",
-    '- Correcto en handoff: "Te paso con un operador para que te ayude con esto."',
-    '- INCORRECTO: "El usuario informa que X" o "Derivo a un operador".',
-    "",
-    'Campo "summary" (solo si action=handoff, null en el resto):',
-    "- NOTA INTERNA para el operador. Nunca la lee el usuario.",
-    "- Tercera persona, 1 oracion, con el problema y lo ya intentado.",
-    '- Ejemplo: "Usuario reporta que el auto no abre; ya reinicio la app y confirma tener señal."',
-    "",
-    'Campo "matched_skill_id": id del skill que estas aplicando. Null si ninguno encaja.',
-    "",
-    'Campo "priority" (solo tiene efecto si action=handoff; en el resto poné null):',
-    '- "urgent": emergencia real con riesgo a personas (accidente con lesion, choque, incendio, robo en curso, auto parado en lugar peligroso).',
-    '- "high": caso sensible que bloquea al usuario y necesita atencion rapida (auxilio mecanico en ruta sin lesiones, auto no abre con reserva activa, cobro erroneo urgente).',
-    "- null: caso administrativo o consulta comun sin urgencia.",
-    "",
-    "Datos conocidos:",
-    knownData,
-    "",
-    "Catalogo de skills para esta categoria:",
-    catalog
+    "Modo del usuario: SIN CLASIFICAR todavia.",
+    "- Si el historial deja claro que es consulta informativa (frases tipo 'consulto', 'puedo?', 'se puede?', 'como funciona', 'no soy usuario', 'estoy averiguando'), trata al usuario como prospect: no pidas email, responde explicativo.",
+    "- Si el historial deja claro que es un cliente con un problema concreto ('no me abre', 'me cobraron mal', 'no puedo cancelar', 'tengo una reserva'), trata como cliente: pedí email primero si no lo tenemos, despues seguí con el skill.",
+    "- Si no esta claro, tu primera respuesta debe ser pedirle que elija: tecnico (problema con app/auto), administrativo (cobros/cuenta) o consulta informativa (no es usuario todavia)."
   ].join("\n");
 }
 
-function formatSkillForPrompt(skill: LoadedSkill): string {
+function formatSkillCompact(skill: LoadedSkill): string {
   const lines: string[] = [
     `- id: ${skill.id}`,
-    `  titulo: ${skill.title}`,
-    `  pedir_email: ${skill.askEmail ? "si" : "no"}`
+    `  titulo: ${skill.title}`
+  ];
+  if (skill.description) {
+    lines.push(`  descripcion: ${skill.description}`);
+  }
+  appendBulletSection(lines, "cuando aplica", skill.triggers);
+  return lines.join("\n");
+}
+
+function formatSkillExpanded(skill: LoadedSkill): string {
+  const lines: string[] = [
+    `- id: ${skill.id}  [SKILL ACTIVO]`,
+    `  titulo: ${skill.title}`
   ];
   if (skill.description) {
     lines.push(`  descripcion: ${skill.description}`);
@@ -230,28 +566,10 @@ function buildHistoryMessages(
   return trimmed.map(turn => ({ role: turn.role, content: turn.content }));
 }
 
-function parseAgentJson(raw: string): Record<string, unknown> | null {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const direct = safeParse(trimmed);
-  if (direct) {
-    return direct;
-  }
-
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start === -1 || end <= start) {
-    return null;
-  }
-  return safeParse(trimmed.slice(start, end + 1));
-}
-
-function safeParse(value: string): Record<string, unknown> | null {
+function parseToolArgs(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
@@ -259,52 +577,4 @@ function safeParse(value: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function normalizeAction(
-  parsed: Record<string, unknown>,
-  skills: LoadedSkill[]
-): AgentAction | null {
-  const kindRaw = parsed.action;
-  if (
-    kindRaw !== "reply" &&
-    kindRaw !== "ask_email" &&
-    kindRaw !== "resolve" &&
-    kindRaw !== "handoff"
-  ) {
-    return null;
-  }
-
-  const text = typeof parsed.text === "string" ? parsed.text.trim() : "";
-  if (!text) {
-    return null;
-  }
-
-  const summaryRaw = parsed.summary;
-  const summary =
-    typeof summaryRaw === "string" && summaryRaw.trim()
-      ? summaryRaw.trim()
-      : null;
-  if (kindRaw === "handoff" && !summary) {
-    return null;
-  }
-
-  const matchedRaw = parsed.matched_skill_id;
-  let matchedSkillId: string | null = null;
-  if (typeof matchedRaw === "string" && matchedRaw.trim()) {
-    const normalized = matchedRaw.trim();
-    const exists = skills.some(skill => skill.id === normalized);
-    matchedSkillId = exists ? normalized : null;
-  }
-
-  const priorityRaw = parsed.priority;
-  let priority: ConversationPriority | null = null;
-  if (typeof priorityRaw === "string") {
-    const normalized = priorityRaw.trim().toLowerCase();
-    if (isConversationPriority(normalized)) {
-      priority = normalized;
-    }
-  }
-
-  return { kind: kindRaw, text, summary, matchedSkillId, priority };
 }
