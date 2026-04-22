@@ -102,7 +102,8 @@ export class Agent {
         temperature: this.config.temperature,
         system,
         messages,
-        tools
+        tools,
+        tool_choice: { type: "any" }
       });
 
       const toolUses = response.content.filter(
