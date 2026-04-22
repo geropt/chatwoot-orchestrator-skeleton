@@ -1,6 +1,6 @@
 {
-  "name": "chatwoot-orchestrator-skeleton",
-  "version": "0.1.0",
+  "name": "mykeego-support-bot",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,9 +8,11 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "check": "tsc --noEmit",
-    "skills:ingest": "tsx src/skills/ingest-cli.ts"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
     "dotenv": "^16.6.1",
     "fastify": "^5.6.1",
     "fastify-raw-body": "^5.0.0",
@@ -19,6 +21,7 @@
   "devDependencies": {
     "@types/node": "^22.15.3",
     "tsx": "^4.20.6",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.5"
   }
 }

@@ -1,42 +1,33 @@
-import type { ConversationCategory } from "../fsm/types.js";
+export type SkillCategory = "tecnico" | "administrativo" | "general";
+
+export type SkillFrontmatter = {
+  id: string;
+  title: string;
+  description: string;
+  category: SkillCategory;
+  ask_email?: boolean;
+};
 
 export type SkillIndexEntry = {
   id: string;
   file: string;
-  title?: string;
-  description?: string;
-  category?: ConversationCategory;
-  enabled?: boolean;
+  title: string;
+  description: string;
+  category: SkillCategory;
+  enabled: boolean;
 };
 
 export type SkillIndex = {
   version: number;
-  generated_at?: string;
+  generated_at: string;
   skills: SkillIndexEntry[];
 };
 
-export type SkillDocument = {
-  id: string;
-  title: string;
-  description?: string;
-  category?: ConversationCategory;
-  ask_email?: boolean;
-  triggers?: string[];
-  diagnostic_questions?: string[];
-  steps?: string[];
-  escalate_when?: string[];
-  constraints?: string[];
-};
-
-export type LoadedSkill = {
+export type Skill = {
   id: string;
   title: string;
   description: string;
-  category: ConversationCategory | null;
+  category: SkillCategory;
   askEmail: boolean;
-  triggers: string[];
-  diagnosticQuestions: string[];
-  steps: string[];
-  escalateWhen: string[];
-  constraints: string[];
+  body: string;
 };

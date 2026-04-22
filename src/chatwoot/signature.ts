@@ -7,13 +7,7 @@ export function verifyChatwootSignature(params: {
   secret: string;
   maxAgeSeconds?: number;
 }): boolean {
-  const {
-    rawBody,
-    timestamp,
-    signature,
-    secret,
-    maxAgeSeconds = 300
-  } = params;
+  const { rawBody, timestamp, signature, secret, maxAgeSeconds = 300 } = params;
 
   if (!timestamp || !signature) return false;
 
@@ -21,9 +15,7 @@ export function verifyChatwootSignature(params: {
   if (Number.isNaN(timestampInt)) return false;
 
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - timestampInt) > maxAgeSeconds) {
-    return false;
-  }
+  if (Math.abs(now - timestampInt) > maxAgeSeconds) return false;
 
   const expected = `sha256=${crypto
     .createHmac("sha256", secret)
@@ -32,9 +24,7 @@ export function verifyChatwootSignature(params: {
 
   const expectedBuffer = Buffer.from(expected);
   const signatureBuffer = Buffer.from(signature);
-  if (expectedBuffer.length !== signatureBuffer.length) {
-    return false;
-  }
+  if (expectedBuffer.length !== signatureBuffer.length) return false;
 
   return crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
 }

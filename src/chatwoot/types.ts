@@ -1,3 +1,13 @@
+export type MessageType = "incoming" | "outgoing";
+export type ConversationStatus = "open" | "resolved" | "pending" | "snoozed";
+export type Priority = "urgent" | "high" | "medium" | "low" | null;
+
+export type ChatwootContact = {
+  id: number;
+  email: string | null;
+  name: string | null;
+};
+
 export type ChatwootWebhookPayload = {
   event?: string;
   id?: number | string;
@@ -18,4 +28,10 @@ export type ChatwootWebhookPayload = {
       contact_id?: number;
     };
   };
+};
+
+export type WebhookHeaders = {
+  signature?: string;
+  timestamp?: string;
+  delivery?: string;
 };
