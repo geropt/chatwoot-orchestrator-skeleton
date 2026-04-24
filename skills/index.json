@@ -1,6 +1,6 @@
 {
-  "version": 4,
-  "generated_at": "2026-04-17T17:35:12.927Z",
+  "version": 5,
+  "generated_at": "2026-04-24T17:50:00.000Z",
   "skills": [
     {
       "id": "auto_no_abre",
@@ -168,6 +168,14 @@
       "title": "Problema de acceso, contraseña o PIN",
       "description": "Soporte para login, reset de contraseña, PIN de seguridad y cuenta bloqueada.",
       "category": "tecnico",
+      "enabled": true
+    },
+    {
+      "id": "prospecto_renting_corporativo",
+      "file": "b2b.md",
+      "title": "Atención inicial a prospectos de renting corporativo MyKeego",
+      "description": "Guía para atender prospectos B2B de renting/suscripción corporativa: detectar segmento (Vaca Muerta o corporativo general), recopilar datos, compartir beneficios y —si califica— derivar a reunión comercial.",
+      "category": "comercial",
       "enabled": true
     },
     {

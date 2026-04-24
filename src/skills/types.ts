@@ -1,4 +1,4 @@
-export type SkillCategory = "tecnico" | "administrativo" | "general";
+export type SkillCategory = "tecnico" | "administrativo" | "general" | "comercial";
 
 export type SkillFrontmatter = {
   id: string;

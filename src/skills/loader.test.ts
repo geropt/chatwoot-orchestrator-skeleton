@@ -14,7 +14,7 @@ describe("SkillsLoader", () => {
       expect(skill.id).toBeTruthy();
       expect(skill.title).toBeTruthy();
       expect(skill.body).toBeTruthy();
-      expect(["tecnico", "administrativo", "general"]).toContain(skill.category);
+      expect(["tecnico", "administrativo", "general", "comercial"]).toContain(skill.category);
     }
   });
 
