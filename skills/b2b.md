@@ -1,7 +1,7 @@
 ---
 id: prospecto_renting_corporativo
 title: Atención inicial a prospectos de renting corporativo MyKeego
-description: "Guía al agente para atender potenciales clientes B2B de MyKeego: detectar el segmento (Vaca Muerta o corporativo general), recopilar datos clave del prospecto, compartir los beneficios diferenciales más relevantes para su contexto y —si califica— proponer una reunión con el equipo comercial. Usá este skill siempre que alguien consulte por vehículos corporativos, renting, suscripción de autos para empresa, movilidad de flota, o alternativas a comprar o leasear vehículos."
+description: Guía al agente para atender potenciales clientes B2B de MyKeego: detectar el segmento (Vaca Muerta o corporativo general), recopilar datos clave del prospecto, compartir los beneficios diferenciales más relevantes para su contexto y —si califica— proponer una reunión con el equipo comercial. Usá este skill siempre que alguien consulte por vehículos corporativos, renting, suscripción de autos para empresa, movilidad de flota, o alternativas a comprar o leasear vehículos.
 category: comercial
 ---
 
@@ -19,9 +19,10 @@ Modelo: el cliente paga una cuota mensual fija y usa el vehículo como si fuera 
 
 Tu rol es consultivo: querés entender la necesidad real del prospecto, transmitir el valor de MyKeego de forma natural y —si tiene el perfil adecuado— facilitar el paso a una reunión con el equipo comercial. No es un interrogatorio ni una demo. Es una conversación.
 
-Los dos resultados posibles al final:
-1. **Prospecto calificado** → cerrar con propuesta de reunión y recopilar email de contacto.
-2. **Prospecto no calificado por ahora** → cerrar amablemente, dejar el canal abierto y el email de MyKeego.
+Los resultados posibles al final:
+1. **Prospecto calificado (2+ vehículos, datos completos)** → proponer reunión comercial + ofrecer one-pager si quiere.
+2. **Prospecto de 1 solo vehículo** → no deriva a reunión, pero sí se le ofrece seguimiento vía email o WhatsApp.
+3. **Prospecto con datos incompletos o incohentes** → intentar completar antes de cerrar; si no es posible, dejar el canal abierto.
 
 ---
 
@@ -44,17 +45,22 @@ Si no queda claro de entrada, preguntá de forma natural:
 
 Recopilá estos datos durante la conversación, sin convertirla en un formulario. Intercalalos con preguntas genuinas y con la info que vayas compartiendo.
 
-| Dato | Cómo pedirlo si no lo dice |
-|------|---------------------------|
-| Nombre completo | "¿Con quién tengo el gusto?" |
-| Empresa | Suele surgir solo; si no: "¿De qué empresa nos escribís?" |
-| Cargo / rol | "¿Cuál es tu rol dentro de la empresa?" |
-| Email de contacto | "¿A qué mail puedo mandarte info o coordinar una llamada?" |
-| Rubro / actividad principal | Parte del segmento detectado |
-| Cantidad de vehículos que necesitan | "¿Tenés una idea de cuántas unidades necesitarían?" |
-| Tipo de vehículo / uso | "¿Qué tipo de vehículo necesitan, o cómo los van a usar?" |
-| Km estimados por mes | "¿Tienen una idea de los km mensuales aproximados?" |
-| Plazo estimado del contrato | "¿Están pensando en algo puntual o una necesidad más continua?" |
+| Dato | Cómo pedirlo si no lo dice | Importancia |
+|------|---------------------------|-------------|
+| Nombre completo | "¿Con quién tengo el gusto?" | Alta |
+| **Empresa** | "¿Desde qué empresa nos escribís?" — dato crítico, siempre capturarlo | **Crítica** |
+| Cargo / rol | "¿Cuál es tu rol dentro de la empresa?" | Alta |
+| Email de contacto | "¿A qué mail puedo mandarte info o coordinar una reunión?" | Alta |
+| WhatsApp (opcional) | "¿Tenés WhatsApp por si el equipo quiere coordinar más rápido?" | Media |
+| Rubro / actividad principal | Parte del segmento; si no surgió: "¿En qué rubro opera la empresa?" | Alta |
+| Cantidad de vehículos que necesitan | "¿Tenés una idea de cuántas unidades necesitarían?" | **Crítica** (define calificación) |
+| Tipo de vehículo / uso | "¿Qué tipo de vehículo necesitan, o para qué uso?" | Alta |
+| Km estimados por mes | "¿Tienen una idea de los km mensuales por vehículo, aproximadamente?" | Media |
+| **Plazo estimado del contrato** | "¿Lo necesitarían para un proyecto puntual o es una necesidad más continua? ¿Tienen un plazo en mente?" | **Alta** (ver criterios abajo) |
+
+> **Nota sobre la empresa:** si el prospecto no la menciona voluntariamente, preguntalo siempre antes de cerrar. El nombre de la empresa es indispensable para que el equipo comercial pueda hacer el seguimiento y evaluar el perfil del lead.
+
+> **Nota sobre el plazo:** el plazo define el tipo de lead. Un contrato de 12+ meses tiene mucho más valor estratégico que uno de 3 meses. Usá esa información para priorizar y orientar el pitch.
 
 ---
 
@@ -104,31 +110,62 @@ No es necesario mencionar todo. Elegí los 2 o 3 puntos que más resuenan con lo
 
 ## Paso 4 — Calificar
 
-Una vez que tengas los datos clave, evaluá si tiene sentido derivar a reunión comercial.
+Una vez que tengas los datos clave, evaluá el nivel del prospecto:
 
-**Califica para reunión si cumple ambas condiciones:**
-- Necesita **3 o más vehículos**
-- Los datos son completos y coherentes: empresa real, uso que tiene sentido, contacto válido
+### Califica para reunión comercial:
+- Necesita **2 o más vehículos**
+- Datos completos y coherentes: nombre, empresa real, rubro que tiene sentido, contacto válido
 
-**Prospecto de alta prioridad** (escalá con urgencia):
-- Operadora grande (YPF, Shell, PAE, etc.) con necesidad de 10+ unidades
-- Necesidad urgente (vehículos en días)
+### Clasificación por plazo (una vez que califica en volumen):
 
-**No califica por ahora** si necesita 1 o 2 vehículos, o si los datos no cierran. No cerrés bruscamente: dejá el canal abierto.
+| Plazo mencionado | Nivel del lead |
+|-----------------|---------------|
+| 12 meses o más | 🔥 Lead estratégico — priorizá y escalá |
+| 6 a 11 meses | ✅ Lead calificado estándar |
+| 3 a 5 meses | Lead válido, proyecto puntual |
+| Sin definir aún | Lead válido; el equipo comercial lo explora |
+
+### Prospecto de alta prioridad (escalá con urgencia):
+- Operadora grande (YPF, Shell, PAE, Tecpetrol, etc.) con 10+ unidades
+- Necesidad urgente (vehículos en días o semanas)
+- Plazo de 12+ meses con flota grande
+
+### Necesita solo 1 vehículo:
+No derivar a reunión, pero sí mantener el vínculo. Ofrecé seguimiento vía email o WhatsApp para cuando la necesidad crezca, y compartí el one-pager si lo quiere.
+
+### Datos incompletos o incohentes:
+Intentá completarlos antes de cerrar. Si el prospecto no colabora, cerrá amablemente sin forzar.
 
 ---
 
 ## Paso 5 — Cierre
 
-### Si califica → proponer reunión
+### Si califica (2+ vehículos, datos completos) → proponer reunión
 
 > *"Con el perfil que me contás, creo que tiene mucho sentido armar una reunión breve con nuestro equipo comercial para mostrarte la solución en detalle y ver exactamente qué se ajusta mejor a la operación de [nombre de empresa]. Son 30 minutos donde podemos responder todo con números concretos. ¿Te parece bien? Te confirmo por [email mencionado] para definir fecha y hora."*
 
-Asegurate de tener el email antes de cerrar.
+Asegurate de tener el email antes de cerrar. Si todavía no lo dijo, pedilo en este momento.
 
-### Si no califica por volumen → mantener el vínculo
+**Ofrecer el one-pager (si califica):**
+Antes de despedirte, ofrecé enviar el material:
+> *"¿Querés que te mande info de MyKeego para que la tengas antes de la reunión? Tenemos un one-pager con los detalles de la solución — te lo mando al mail que me diste."*
 
-> *"Hoy el renting corporativo tiene un mínimo de 3 unidades, así que por volumen todavía no llegaríamos a la propuesta que se ajusta mejor. Pero te dejo el contacto directo para cuando la necesidad crezca: suscripciones@mykeego.com. Y si me dejás tu mail, con gusto te mando info para que la tengas a mano."*
+Si acepta, confirmá que le va a llegar desde suscripciones@mykeego.com y registrá el pedido para el equipo.
+
+---
+
+### Si necesita solo 1 vehículo → mantener el vínculo con canal de contacto
+
+> *"Para renting corporativo trabajamos a partir de 2 unidades, así que por volumen todavía no estaríamos en el rango ideal. Pero quiero mantener el contacto para cuando la necesidad crezca. ¿Preferís que te sigamos por email o por WhatsApp?"*
+
+Según lo que responda, tomá el dato correspondiente. También podés ofrecer el one-pager:
+> *"Si querés, te mando info de la solución para que la tengas a mano cuando lo necesites."*
+
+---
+
+### Si los datos no cierran → cerrar amablemente
+
+> *"Gracias por escribirnos. Si en algún momento avanza la necesidad o podés contarme más sobre el proyecto, con gusto seguimos la conversación. También podés escribirnos directamente a suscripciones@mykeego.com."*
 
 ---
 
