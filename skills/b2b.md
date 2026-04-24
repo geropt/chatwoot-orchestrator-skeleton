@@ -1,7 +1,7 @@
 ---
 id: prospecto_renting_corporativo
 title: Atención inicial a prospectos de renting corporativo MyKeego
-description: Guía al agente para atender potenciales clientes B2B de MyKeego: detectar el segmento (Vaca Muerta o corporativo general), recopilar datos clave del prospecto, compartir los beneficios diferenciales más relevantes para su contexto y —si califica— proponer una reunión con el equipo comercial. Usá este skill siempre que alguien consulte por vehículos corporativos, renting, suscripción de autos para empresa, movilidad de flota, o alternativas a comprar o leasear vehículos.
+description: "Guía al agente para atender potenciales clientes B2B de MyKeego: detectar el segmento (Vaca Muerta o corporativo general), recopilar datos clave del prospecto, compartir los beneficios diferenciales más relevantes para su contexto y —si califica— proponer una reunión con el equipo comercial. Usá este skill siempre que alguien consulte por vehículos corporativos, renting, suscripción de autos para empresa, movilidad de flota, o alternativas a comprar o leasear vehículos."
 category: comercial
 ---
 
