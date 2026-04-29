@@ -1,9 +1,15 @@
 import type { Agent } from "../agent/agent.js";
 import type { AgentDecision } from "../agent/decision.js";
+import type { Config } from "../config.js";
 import type { HandoffExecutor } from "../handoff/executor.js";
+import type { OffHoursIntakeExecutor } from "../handoff/off-hours-intake.js";
 import { preLlmHandoffReason } from "../handoff/rules.js";
 import type { ConversationStore } from "../state/conversation-store.js";
 import type { DedupeStore } from "../state/dedupe-store.js";
+import {
+  getBusinessHoursStatus,
+  type BusinessHoursStatus
+} from "../support/business-hours.js";
 import type { ChatwootClient } from "./client.js";
 import { verifyChatwootSignature } from "./signature.js";
 import type { ChatwootWebhookPayload, WebhookHeaders } from "./types.js";
@@ -18,6 +24,7 @@ export type WebhookDeps = {
   chatwoot: ChatwootClient;
   agent: Agent;
   handoff: HandoffExecutor;
+  offHoursIntake: OffHoursIntakeExecutor;
   store: ConversationStore;
   dedupe: DedupeStore;
   config: {
@@ -25,6 +32,7 @@ export type WebhookDeps = {
     skipSignatureVerification: boolean;
     maxTurns: number;
     maxRetries: number;
+    support: Config["support"];
   };
 };
 
@@ -92,6 +100,11 @@ export async function handleWebhook(
   const email =
     state.email ??
     (typeof payload.sender?.email === "string" ? payload.sender.email : undefined);
+  const hours = getBusinessHoursStatus({
+    timezone: deps.config.support.timezone,
+    schedule: deps.config.support.businessHours,
+    holidays: deps.config.support.holidays
+  });
 
   const preHandoff = preLlmHandoffReason({
     text: content,
@@ -99,7 +112,7 @@ export async function handleWebhook(
     maxTurns: deps.config.maxTurns
   });
 
-  if (preHandoff) {
+  if (preHandoff && hours.isOpen) {
     await deps.handoff.execute({
       conversationId,
       reason: preHandoff,
@@ -117,7 +130,9 @@ export async function handleWebhook(
     const decision = await deps.agent.run({
       state,
       userMessage: content,
-      ctx: { conversationId, contactId, email }
+      ctx: { conversationId, contactId, email },
+      businessHours: hours,
+      emergencyPhone: deps.config.support.emergencyPhone
     });
 
     deps.store.appendHistory(conversationId, { role: "user", content });
@@ -128,23 +143,41 @@ export async function handleWebhook(
       email
     });
 
-    await applyDecision({
+    const appliedAction = await applyDecision({
       decision,
       conversationId,
       chatwoot: deps.chatwoot,
       handoff: deps.handoff,
+      offHoursIntake: deps.offHoursIntake,
       store: deps.store,
       userMessage: content,
-      email
+      email,
+      hours,
+      emergencyPhone: deps.config.support.emergencyPhone
     });
 
-    return { ok: true, action: decision.action };
+    return { ok: true, action: appliedAction ?? decision.action };
   } catch (err) {
     deps.store.update(conversationId, {
       agentRetries: state.agentRetries + 1
     });
     const refreshed = deps.store.get(conversationId);
     if (refreshed.agentRetries >= deps.config.maxRetries) {
+      if (!hours.isOpen) {
+        await deps.offHoursIntake.execute({
+          conversationId,
+          reason: "llm_error",
+          userMessage: content,
+          userFacingMessage: offHoursMessage(hours),
+          hours,
+          summary: `Error del agente tras ${refreshed.agentRetries} intentos: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+          email
+        });
+        return { ok: true, action: "off_hours:llm_error" };
+      }
+
       await deps.handoff.execute({
         conversationId,
         reason: "llm_error",
@@ -167,13 +200,49 @@ async function applyDecision(params: {
   conversationId: number;
   chatwoot: ChatwootClient;
   handoff: HandoffExecutor;
+  offHoursIntake: OffHoursIntakeExecutor;
   store: ConversationStore;
   userMessage: string;
   email?: string;
-}): Promise<void> {
-  const { decision, conversationId, chatwoot, handoff, store } = params;
+  hours: BusinessHoursStatus;
+  emergencyPhone: string;
+}): Promise<string | null> {
+  const { decision, conversationId, chatwoot, handoff, offHoursIntake, store } =
+    params;
 
   if (decision.action === "handoff") {
+    if (!params.hours.isOpen && decision.priority === "urgent") {
+      await offHoursIntake.execute({
+        conversationId,
+        reason: "emergency",
+        userMessage: params.userMessage,
+        userFacingMessage: emergencyMessage(params.emergencyPhone),
+        hours: params.hours,
+        summary: decision.summary,
+        category: decision.category,
+        priority: "urgent",
+        matchedSkillId: decision.matchedSkillId,
+        email: params.email
+      });
+      return "off_hours:emergency";
+    }
+
+    if (!params.hours.isOpen && decision.priority !== "urgent") {
+      await offHoursIntake.execute({
+        conversationId,
+        reason: "agent_decision",
+        userMessage: params.userMessage,
+        userFacingMessage: offHoursMessage(params.hours),
+        hours: params.hours,
+        summary: decision.summary,
+        category: decision.category,
+        priority: decision.priority ?? null,
+        matchedSkillId: decision.matchedSkillId,
+        email: params.email
+      });
+      return "off_hours:agent_decision";
+    }
+
     await handoff.execute({
       conversationId,
       reason: "agent_decision",
@@ -185,7 +254,7 @@ async function applyDecision(params: {
       matchedSkillId: decision.matchedSkillId,
       email: params.email
     });
-    return;
+    return null;
   }
 
   await chatwoot.sendMessage(conversationId, decision.text);
@@ -196,16 +265,29 @@ async function applyDecision(params: {
 
   if (decision.action === "ask_email") {
     store.update(conversationId, { phase: "awaiting_email" });
-    return;
+    return null;
   }
 
   if (decision.action === "resolve") {
     await chatwoot.toggleStatus(conversationId, "resolved");
     store.reset(conversationId);
-    return;
+    return null;
   }
 
   store.update(conversationId, { phase: "active" });
+  return null;
+}
+
+function offHoursMessage(hours: BusinessHoursStatus): string {
+  const nextOpen = hours.nextOpenAt
+    ? ` El equipo retoma en el próximo horario de oficina.`
+    : "";
+  return `Estamos fuera del horario de atención. Ya tomé tu pedido y queda registrado; un operador lo va a revisar cuando haya atención disponible.${nextOpen}`;
+}
+
+function emergencyMessage(phone: string): string {
+  const phonePart = phone ? ` al ${phone}` : "";
+  return `Por lo que contás puede ser una emergencia. Llamá ahora al teléfono de emergencias de MyKeego${phonePart}. Si hay riesgo para personas, contactá también a los servicios de emergencia locales.`;
 }
 
 function isIncoming(type: string | number | undefined): boolean {

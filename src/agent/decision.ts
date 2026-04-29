@@ -48,7 +48,7 @@ export const emitDecisionSchema: JsonSchema = {
       type: "string",
       enum: ["urgent", "high", "medium", "low"],
       description:
-        "Solo para action=handoff. urgent si hay riesgo a personas; high si bloquea un alquiler en curso."
+        "Solo para action=handoff. urgent si hay riesgo a personas o, fuera de horario, si requiere asistencia inmediata por una reserva/alquiler en curso; high si bloquea un alquiler en curso dentro de horario."
     }
   }
 };

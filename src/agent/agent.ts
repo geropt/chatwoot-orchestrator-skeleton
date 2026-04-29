@@ -7,6 +7,7 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import type { Skill } from "../skills/types.js";
 import type { ConversationState } from "../state/conversation-store.js";
+import type { BusinessHoursStatus } from "../support/business-hours.js";
 import {
   EMIT_DECISION_TOOL,
   emitDecisionSchema,
@@ -29,6 +30,8 @@ export type AgentRunInput = {
   state: ConversationState;
   userMessage: string;
   ctx: ToolContext;
+  businessHours?: BusinessHoursStatus;
+  emergencyPhone?: string;
 };
 
 export class Agent {
@@ -39,7 +42,13 @@ export class Agent {
     private readonly config: AgentConfig
   ) {}
 
-  async run({ state, userMessage, ctx }: AgentRunInput): Promise<AgentDecision> {
+  async run({
+    state,
+    userMessage,
+    ctx,
+    businessHours,
+    emergencyPhone
+  }: AgentRunInput): Promise<AgentDecision> {
     const { cacheable } = buildSystemPrompt(this.skills);
     const systemBlocks: TextBlockParam[] = [
       {
@@ -49,7 +58,7 @@ export class Agent {
       },
       {
         type: "text",
-        text: buildContextBlock(state)
+        text: buildContextBlock(state, businessHours, emergencyPhone)
       }
     ];
 

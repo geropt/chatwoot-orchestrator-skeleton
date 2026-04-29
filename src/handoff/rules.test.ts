@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  detectEmergency,
   detectExplicitHumanRequest,
   preLlmHandoffReason
 } from "./rules.js";
@@ -29,6 +30,23 @@ describe("detectExplicitHumanRequest", () => {
       false
     );
     expect(detectExplicitHumanRequest("el auto no prende")).toBe(false);
+  });
+});
+
+describe("detectEmergency", () => {
+  it("matches explicit safety emergencies", () => {
+    expect(detectEmergency("choqué y hay una persona lesionada")).toBe(true);
+    expect(detectEmergency("hay humo y fuego en el auto")).toBe(true);
+    expect(detectEmergency("me asaltaron con el auto")).toBe(true);
+    expect(detectEmergency("estoy en peligro")).toBe(true);
+  });
+
+  it("does not match common operational support cases", () => {
+    expect(detectEmergency("no me abre el auto")).toBe(false);
+    expect(detectEmergency("tengo problemas con mi reserva")).toBe(false);
+    expect(detectEmergency("no encuentro el auto")).toBe(false);
+    expect(detectEmergency("no puedo finalizar la reserva")).toBe(false);
+    expect(detectEmergency("el auto no prende")).toBe(false);
   });
 });
 

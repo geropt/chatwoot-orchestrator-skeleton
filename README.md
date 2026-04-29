@@ -75,6 +75,10 @@ curl http://localhost:4000/health
 | `AGENT_MAX_TOOL_ITERATIONS` | Máximo de iteraciones tool-use por turno (default 3) |
 | `AGENT_TEMPERATURE` | Temperatura del modelo (default 0.3) |
 | `AGENT_MAX_TOKENS` | Máximo de tokens de salida (default 1024) |
+| `SUPPORT_TIMEZONE` | Zona horaria usada para decidir si hay atención (default `America/Argentina/Buenos_Aires`) |
+| `SUPPORT_BUSINESS_HOURS_JSON` | Horario semanal en JSON, por día (`monday`...`sunday`) con rangos `{ "start": "08:30", "end": "17:00" }` |
+| `SUPPORT_HOLIDAYS` | Feriados/cierres en formato `YYYY-MM-DD`, separados por coma |
+| `SUPPORT_EMERGENCY_PHONE` | Teléfono que el bot indica ante emergencias fuera de horario |
 
 ## Endpoints
 
@@ -88,7 +92,7 @@ curl http://localhost:4000/health
 3. Se deduplica por `x-chatwoot-delivery` + `payload.id`.
 4. Se filtra: solo mensajes entrantes del contacto (no privados, no agente).
 5. Si la conversación estaba en handoff y el agente humano la movió a `pending`, se reinicia el bot.
-6. **Reglas duras pre-LLM**: si el usuario pide humano o se alcanzó `AGENT_MAX_TURNS`, handoff directo.
+6. **Reglas duras pre-LLM**: si el usuario pide humano o se alcanzó `AGENT_MAX_TURNS`, handoff directo solo dentro de horario. Fuera de horario el mensaje pasa por el agente para evaluar si requiere asistencia inmediata.
 7. **Agente LLM** con:
    - System prompt en dos bloques: uno cacheable (rol + reglas + catálogo completo de skills) y uno variable (contexto del turno actual).
    - Tool-use forzado sobre `emit_decision` para salida estructurada.
@@ -98,7 +102,17 @@ curl http://localhost:4000/health
    - `reply` → `sendMessage`.
    - `ask_email` → `sendMessage` + cambia fase a `awaiting_email`.
    - `resolve` → `sendMessage` + `toggleStatus("resolved")` + reset.
-   - `handoff` → `toggleStatus("open")` + `togglePriority` + nota privada con resumen.
+   - `handoff` en horario → `toggleStatus("open")` + `togglePriority` + nota privada con resumen.
+   - `handoff` fuera de horario no urgente → mensaje de pedido tomado + nota privada + `toggleStatus("snoozed")` hasta la próxima apertura, o `pending` si no hay próxima apertura configurada.
+
+## Fuera de horario y emergencias
+
+El horario de atención se calcula en código con `SUPPORT_TIMEZONE`, `SUPPORT_BUSINESS_HOURS_JSON` y `SUPPORT_HOLIDAYS`. No depende del LLM ni de las automations de Chatwoot.
+
+Fuera de horario:
+- Si el usuario pide operador, el bot no delega en vivo automáticamente: el agente evalúa si el caso requiere asistencia inmediata.
+- Si el caso no es urgente pero el agente decide `handoff`, se aplica el mismo flujo diferido.
+- Si el agente clasifica el caso como `priority=urgent`, responde con `SUPPORT_EMERGENCY_PHONE`, marca prioridad `urgent`, deja nota privada y también difiere la revisión humana. Esto incluye emergencias de seguridad y bloqueos operativos urgentes, como no poder abrir/iniciar/finalizar una reserva en curso cuando el usuario no puede resolverlo con los pasos guiados.
 
 ## Skills
 

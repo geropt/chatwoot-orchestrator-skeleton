@@ -33,11 +33,17 @@ export class ChatwootClient {
 
   async toggleStatus(
     conversationId: number,
-    status: ConversationStatus
+    status: ConversationStatus,
+    options?: { snoozedUntil?: Date }
   ): Promise<void> {
     await this.request(`/conversations/${conversationId}/toggle_status`, {
       method: "POST",
-      body: JSON.stringify({ status })
+      body: JSON.stringify({
+        status,
+        ...(options?.snoozedUntil
+          ? { snoozed_until: Math.floor(options.snoozedUntil.getTime() / 1000) }
+          : {})
+      })
     });
   }
 

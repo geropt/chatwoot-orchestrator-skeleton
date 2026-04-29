@@ -2,6 +2,7 @@ export type ConversationPhase =
   | "cold_start"
   | "active"
   | "awaiting_email"
+  | "off_hours_intake"
   | "handoff_active";
 
 export type HistoryEntry = {

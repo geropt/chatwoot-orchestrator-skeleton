@@ -22,7 +22,29 @@ export type Config = {
     temperature: number;
     maxTokens: number;
   };
+  support: {
+    timezone: string;
+    businessHours: BusinessHoursConfig;
+    holidays: string[];
+    emergencyPhone: string;
+  };
 };
+
+export type Weekday =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+
+export type BusinessHoursPeriod = {
+  start: string;
+  end: string;
+};
+
+export type BusinessHoursConfig = Partial<Record<Weekday, BusinessHoursPeriod[]>>;
 
 function required(name: string): string {
   const value = process.env[name];
@@ -53,6 +75,37 @@ function asNumber(name: string, fallback: number): number {
     throw new Error(`Env var ${name} must be a number, got: ${raw}`);
   }
   return parsed;
+}
+
+const DEFAULT_BUSINESS_HOURS: BusinessHoursConfig = {
+  monday: [{ start: "08:30", end: "17:00" }],
+  tuesday: [{ start: "08:30", end: "17:00" }],
+  wednesday: [{ start: "08:30", end: "17:00" }],
+  thursday: [{ start: "08:30", end: "17:00" }],
+  friday: [{ start: "08:30", end: "17:00" }]
+};
+
+function asBusinessHours(name: string): BusinessHoursConfig {
+  const raw = process.env[name];
+  if (!raw || !raw.trim()) return DEFAULT_BUSINESS_HOURS;
+  try {
+    return JSON.parse(raw) as BusinessHoursConfig;
+  } catch (err) {
+    throw new Error(
+      `Env var ${name} must be valid JSON: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+}
+
+function asCsv(name: string): string[] {
+  const raw = process.env[name];
+  if (!raw || !raw.trim()) return [];
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 export function loadConfig(): Config {
@@ -89,6 +142,12 @@ export function loadConfig(): Config {
       maxToolIterations: asNumber("AGENT_MAX_TOOL_ITERATIONS", 3),
       temperature: asNumber("AGENT_TEMPERATURE", 0.3),
       maxTokens: asNumber("AGENT_MAX_TOKENS", 1024)
+    },
+    support: {
+      timezone: optional("SUPPORT_TIMEZONE", "America/Argentina/Buenos_Aires"),
+      businessHours: asBusinessHours("SUPPORT_BUSINESS_HOURS_JSON"),
+      holidays: asCsv("SUPPORT_HOLIDAYS"),
+      emergencyPhone: optional("SUPPORT_EMERGENCY_PHONE", "")
     }
   };
 }

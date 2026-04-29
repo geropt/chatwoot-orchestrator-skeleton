@@ -1,5 +1,6 @@
 import type { Skill } from "../skills/types.js";
 import type { ConversationState } from "../state/conversation-store.js";
+import type { BusinessHoursStatus } from "../support/business-hours.js";
 
 const ROLE_AND_RULES = `Sos el asistente virtual de soporte de MyKeego, una empresa argentina de carsharing.
 
@@ -20,9 +21,11 @@ Tono:
 Reglas duras:
 - No inventes información. Si el catálogo no lo cubre, hacé handoff.
 - No pidas datos sensibles más allá del email y el código de reserva.
-- Si el usuario pide explícitamente hablar con un humano, derivá inmediatamente (action=handoff).
+- Si el usuario pide explícitamente hablar con un humano dentro del horario de atención, derivá inmediatamente (action=handoff).
+- Si el usuario pide humano fuera del horario de atención, evaluá primero si necesita asistencia inmediata. Si no es inmediato, tomá el pedido y explicá que un operador lo retomará en horario de oficina.
 - Si el usuario te saluda y cierra la conversación sin más, respondé con un cierre amable y action=resolve.
-- Si hay riesgo físico, accidente o lesión, derivá con priority=urgent.
+- Si hay riesgo físico, accidente o lesión, marcá priority=urgent. Fuera de horario, indicá que debe llamar al teléfono de emergencias.
+- Fuera de horario, también tratá como asistencia inmediata los bloqueos operativos de una reserva en curso o por iniciar que dejan al usuario sin poder resolver solo: el auto no abre tras los pasos básicos, no puede iniciar la reserva, no encuentra el auto, no puede finalizar el alquiler, el auto no prende o está varado con el vehículo. En esos casos hacé handoff con priority=urgent para que el sistema le indique el teléfono de emergencias.
 - Si la guía que aplica indica "ask_email: true" y todavía no tenés el email del usuario, pedilo con action=ask_email antes de avanzar.
 
 Cómo usar las guías (skills):
@@ -42,9 +45,25 @@ export function buildSystemPrompt(skills: Skill[]) {
   return { cacheable };
 }
 
-export function buildContextBlock(state: ConversationState): string {
+export function buildContextBlock(
+  state: ConversationState,
+  businessHours?: BusinessHoursStatus,
+  emergencyPhone?: string
+): string {
   const lines: string[] = [];
   lines.push(`Turno actual: ${state.turns + 1}`);
+  if (businessHours) {
+    lines.push(
+      `Horario de atención: ${
+        businessHours.isOpen ? "abierto" : "fuera de horario"
+      } (${businessHours.localDate} ${businessHours.localTime} ${
+        businessHours.timezone
+      })`
+    );
+    if (!businessHours.isOpen && emergencyPhone) {
+      lines.push(`Teléfono de emergencias: ${emergencyPhone}`);
+    }
+  }
   if (state.email) lines.push(`Email del usuario: ${state.email}`);
   if (state.matchedSkillId)
     lines.push(`Skill detectado en turnos anteriores: ${state.matchedSkillId}`);

@@ -4,6 +4,7 @@ import { ToolRegistry } from "./agent/tools/registry.js";
 import { ChatwootClient } from "./chatwoot/client.js";
 import { loadConfig } from "./config.js";
 import { HandoffExecutor } from "./handoff/executor.js";
+import { OffHoursIntakeExecutor } from "./handoff/off-hours-intake.js";
 import { buildServer } from "./server.js";
 import { SkillsLoader } from "./skills/loader.js";
 import { ConversationStore } from "./state/conversation-store.js";
@@ -37,19 +38,22 @@ async function main(): Promise<void> {
   const store = new ConversationStore();
   const dedupe = new DedupeStore();
   const handoff = new HandoffExecutor(chatwoot, store);
+  const offHoursIntake = new OffHoursIntakeExecutor(chatwoot, store);
 
   const server = await buildServer(
     {
       chatwoot,
       agent,
       handoff,
+      offHoursIntake,
       store,
       dedupe,
       config: {
         webhookSecret: config.chatwoot.webhookSecret,
         skipSignatureVerification: config.chatwoot.skipSignatureVerification,
         maxTurns: config.agent.maxTurns,
-        maxRetries: config.agent.maxRetries
+        maxRetries: config.agent.maxRetries,
+        support: config.support
       }
     },
     { logLevel: config.logLevel }
