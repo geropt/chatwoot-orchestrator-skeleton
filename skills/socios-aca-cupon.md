@@ -22,10 +22,11 @@ ask_email: true
 3. Agregá el cupón a la reserva al momento de confirmarla para que se efectúe el descuento.
 4. Ejemplo: reserva de $60.000 → reintegro $30.000 y quedan $70.000 disponibles de tope para la semana. Reserva única de $200.000 → reintegro $100.000, se consume todo el tope hasta la próxima semana.
 5. Con cupón ACA el cobro es: 70% al confirmar la reserva, saldo restante + combustible al finalizar.
-6. Si el sistema no lo reconoce como socio: debe contactar a ACA para que revisen su perfil; una vez corregido del lado de ACA, MyKeego lo detecta y se puede usar el cupón.
+6. Si el sistema no lo reconoce como socio ACA o el cupón no aparece, no le indiques que contacte al ACA: derivá a un agente para que revise el caso.
 
 ## Cuándo derivar a operador
-- Cupón no aparece pero el usuario asegura ser socio activo (y ya contactó a ACA).
+- Cupón no aparece pero el usuario asegura ser socio activo.
+- El sistema no reconoce al usuario como socio ACA.
 - Reintegro no coincide con lo esperado.
 
 ## Restricciones
