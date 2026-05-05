@@ -221,8 +221,8 @@
     {
       "id": "zona_operativa",
       "file": "zona-operativa.md",
-      "title": "Zona operativa y reubicación del vehículo",
-      "description": "Qué es la zona operativa, qué pasa si el vehículo queda fuera y costos de reubicación.",
+      "title": "Modalidad round trip y destinos permitidos",
+      "description": "Regla de devolución al mismo estacionamiento y consultas sobre destinos permitidos.",
       "category": "administrativo",
       "enabled": true
     }
