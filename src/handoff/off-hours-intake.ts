@@ -1,5 +1,6 @@
 import type { AgentDecision } from "../agent/decision.js";
 import type { ChatwootClient } from "../chatwoot/client.js";
+import { toWhatsappFormatting } from "../chatwoot/format.js";
 import type { Priority } from "../chatwoot/types.js";
 import type { ConversationState, ConversationStore } from "../state/conversation-store.js";
 import type { BusinessHoursStatus } from "../support/business-hours.js";
@@ -32,10 +33,11 @@ export class OffHoursIntakeExecutor {
   async execute(input: OffHoursIntakeInput): Promise<void> {
     const state = this.store.get(input.conversationId);
 
-    await this.chatwoot.sendMessage(input.conversationId, input.userFacingMessage);
+    const outgoing = toWhatsappFormatting(input.userFacingMessage);
+    await this.chatwoot.sendMessage(input.conversationId, outgoing);
     this.store.appendHistory(input.conversationId, {
       role: "assistant",
-      content: input.userFacingMessage
+      content: outgoing
     });
 
     if (input.priority) {

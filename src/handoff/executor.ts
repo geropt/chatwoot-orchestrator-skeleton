@@ -1,4 +1,5 @@
 import type { ChatwootClient } from "../chatwoot/client.js";
+import { toWhatsappFormatting } from "../chatwoot/format.js";
 import type { Priority } from "../chatwoot/types.js";
 import type { ConversationState } from "../state/conversation-store.js";
 import type { ConversationStore } from "../state/conversation-store.js";
@@ -26,13 +27,11 @@ export class HandoffExecutor {
     const state = this.store.get(input.conversationId);
 
     if (input.userFacingMessage) {
-      await this.chatwoot.sendMessage(
-        input.conversationId,
-        input.userFacingMessage
-      );
+      const outgoing = toWhatsappFormatting(input.userFacingMessage);
+      await this.chatwoot.sendMessage(input.conversationId, outgoing);
       this.store.appendHistory(input.conversationId, {
         role: "assistant",
-        content: input.userFacingMessage
+        content: outgoing
       });
     }
 

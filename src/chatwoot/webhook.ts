@@ -11,6 +11,7 @@ import {
   type BusinessHoursStatus
 } from "../support/business-hours.js";
 import type { ChatwootClient } from "./client.js";
+import { toWhatsappFormatting } from "./format.js";
 import { verifyChatwootSignature } from "./signature.js";
 import type { ChatwootWebhookPayload, WebhookHeaders } from "./types.js";
 
@@ -257,10 +258,11 @@ async function applyDecision(params: {
     return null;
   }
 
-  await chatwoot.sendMessage(conversationId, decision.text);
+  const outgoingText = toWhatsappFormatting(decision.text);
+  await chatwoot.sendMessage(conversationId, outgoingText);
   store.appendHistory(conversationId, {
     role: "assistant",
-    content: decision.text
+    content: outgoingText
   });
 
   if (decision.action === "ask_email") {
