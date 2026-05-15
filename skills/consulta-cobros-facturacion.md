@@ -20,7 +20,7 @@ ask_email: true
 
 ## Pasos a guiar
 1. Si es el cargo de $15.000: es la verificación automática de la tarjeta, no constituye un cobro y se anula. El tiempo de anulación depende del banco.
-2. Método de cobro de reservas: 70% al confirmar + 30% + combustible + peajes al finalizar.
+2. Método de cobro de reservas: 70% al confirmar; el resto del alquiler (incluido el esquema del 30% habitual) se liquida en el cierre de la reserva. **Combustible y peajes** son aparte y **pueden cobrarse después** del cierre, cuando terceros (estación, concesiones) envían el detalle. Para el proceso de peajes, usar el skill **peajes_telepase**.
 3. Cuotas: reservas tradicionales hasta 3 cuotas sin interés, packs hasta 6 cuotas sin interés. Las extensiones se pagan en un solo pago.
 4. Método de pago aceptado: solo tarjeta de crédito bancarizada a nombre del titular.
 5. Para otros cargos: pedir email, fecha, monto, concepto + captura o comprobante.

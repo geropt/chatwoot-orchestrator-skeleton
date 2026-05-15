@@ -134,7 +134,7 @@
       "id": "peajes_telepase",
       "file": "peajes-telepase.md",
       "title": "Peajes y telepase",
-      "description": "Cómo se cobran los peajes durante una reserva y uso del telepase del vehículo.",
+      "description": "Facturación al costo de concesión, detalle por pasada, aviso previo por correo, cobro posible después del cierre de la reserva y débito en tarjeta de garantía.",
       "category": "administrativo",
       "enabled": true
     },
