@@ -1,6 +1,6 @@
 {
-  "version": 6,
-  "generated_at": "2026-05-11T14:27:00.000Z",
+  "version": 7,
+  "generated_at": "2026-06-03T12:42:00.000Z",
   "skills": [
     {
       "id": "auto_no_abre",
@@ -96,6 +96,14 @@
       "title": "Eliminar cuenta o tarjeta",
       "description": "Proceso para dar de baja la cuenta o eliminar una tarjeta asociada.",
       "category": "administrativo",
+      "enabled": true
+    },
+    {
+      "id": "experience_packs_galicia",
+      "file": "experience-packs-galicia.md",
+      "title": "Experience Packs con Galicia – 12 cuotas sin interés",
+      "description": "Beneficio exclusivo para usuarios con tarjeta de crédito Galicia: Experience Packs (3, 7, 14 o 30 días) en hasta 12 cuotas sin interés y reservas con hasta 90 días de anticipación.",
+      "category": "comercial",
       "enabled": true
     },
     {
