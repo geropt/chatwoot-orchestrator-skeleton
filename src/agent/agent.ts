@@ -112,7 +112,14 @@ export class Agent {
         system,
         messages,
         tools,
-        tool_choice: { type: "any" }
+        tool_choice: { type: "any" },
+        // Modelos tipo Kimi K2.6 traen "reasoning" activado por defecto y se
+        // comen el presupuesto de max_tokens pensando, devolviendo el tool_use
+        // con args vacíos. Lo desactivamos para respuestas rápidas y completas.
+        // (extensión de OpenRouter; no es parte del tipo del SDK de Anthropic)
+        reasoning: { enabled: false }
+      } as Anthropic.MessageCreateParamsNonStreaming & {
+        reasoning: { enabled: boolean };
       });
 
       const toolUses = response.content.filter(
