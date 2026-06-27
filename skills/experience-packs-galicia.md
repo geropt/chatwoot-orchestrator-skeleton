@@ -1,7 +1,7 @@
 ---
 id: experience_packs_galicia
 title: Experience Packs con Galicia – 12 cuotas sin interés
-description: Beneficio exclusivo para usuarios con tarjeta de crédito Galicia para comprar Experience Packs (3, 7, 14 o 30 días) en hasta 12 cuotas sin interés y reservar con hasta 90 días de anticipación.
+description: Beneficio exclusivo para usuarios con tarjeta de crédito Galicia para comprar Experience Packs (3, 7, 14 o 30 días, TODOS incluidos) en hasta 12 cuotas sin interés y reservar con hasta 90 días de anticipación.
 category: comercial
 ask_email: false
 ---
@@ -41,20 +41,25 @@ Ejemplos de frases para usar en la conversación:
 ## Pasos a guiar
 
 1. **Beneficio:** Experience Packs en hasta **12 cuotas sin interés** abonando con tarjeta de crédito **Galicia**. Con otros medios de pago, los packs se financian hasta 6 cuotas sin interés.
-2. **Packs disponibles:** 3, 7, 14 o 30 días. Cada pack tiene tarifas preferenciales respecto del precio por día de una reserva tradicional.
-3. **Ventana de anticipación:** los packs permiten reservar con **hasta 90 días de anticipación** desde la fecha de compra.
-4. **Casos de uso típicos:** vacaciones de invierno, escapadas de fin de semana largo, viajes familiares, eventos puntuales, necesidades de movilidad futura.
-5. **Cómo comprar:** desde la app, en la sección Experience Packs. Al seleccionar el pack se elige la fecha de uso (dentro de los 90 días) y se confirma el pago con la tarjeta Galicia para activar las 12 cuotas.
-6. **Medio de pago:** solo tarjeta de **crédito Galicia** (no débito, no otras tarjetas). El nombre del titular debe coincidir con el de la cuenta MyKeego.
-7. **Combinación con otros beneficios:** el pack ya tiene tarifa promocional; la financiación a 12 cuotas es la promoción aplicada al pack. Los cupones de descuento (ej.: ACA) **no** se acumulan con Experience Packs.
+2. **Packs incluidos en la promo Galicia:** **TODOS los packs aplican** — 3, 7, 14 y 30 días. **No excluir el pack de 3 días**: también se puede pagar en 12 cuotas sin interés con Galicia.
+3. **Packs disponibles:** 3, 7, 14 o 30 días. Cada pack tiene tarifas preferenciales respecto del precio por día de una reserva tradicional.
+4. **Ventana de anticipación:** los packs permiten reservar con **hasta 90 días de anticipación** desde la fecha de compra.
+5. **Casos de uso típicos:** vacaciones de invierno, escapadas de fin de semana largo, viajes familiares, eventos puntuales, necesidades de movilidad futura.
+6. **Cómo comprar:** desde la app, en la sección Experience Packs. Al seleccionar el pack se elige la fecha de uso (dentro de los 90 días) y se confirma el pago con la tarjeta Galicia para activar las 12 cuotas.
+7. **Medio de pago:** solo tarjeta de **crédito Galicia** (no débito, no otras tarjetas). El nombre del titular debe coincidir con el de la cuenta MyKeego.
+8. **Si la app solo ofrece 3 cuotas en un pack** (ej.: pack de 3 días): **NO** asumir que es porque el pack está excluido de la promo. El pack de 3 días SÍ está incluido — derivar a operador para revisar el caso.
+9. **Combinación con otros beneficios:** el pack ya tiene tarifa promocional; la financiación a 12 cuotas es la promoción aplicada al pack. Los cupones de descuento (ej.: ACA) **no** se acumulan con Experience Packs.
 
 ## Cuándo derivar a operador
-- El usuario tiene tarjeta Galicia pero la app no le habilita las 12 cuotas al pagar.
+- El usuario tiene tarjeta Galicia pero la app no le habilita las 12 cuotas al pagar **cualquiera** de los packs (incluido el de 3 días).
+- En el pack de 3 días con Galicia la app ofrece solo 3 cuotas: derivar para revisar configuración de la promo.
 - Diferencia entre las cuotas mostradas en la app y las informadas en el resumen del banco.
 - Usuario no puede completar la compra del pack pese a usar tarjeta Galicia.
 - Reclamo por una compra ya realizada en menos cuotas de las esperadas.
 
 ## Restricciones
+- **NO decirle al usuario que el pack de 3 días está excluido de la promo Galicia.** Todos los packs (3, 7, 14 y 30 días) aplican a las 12 cuotas sin interés con Galicia.
+- **NO inventar exclusiones por duración del pack.** Si la app muestra menos cuotas de las esperadas con Galicia, es un problema técnico/de configuración a revisar, no una regla del beneficio.
 - No prometer 12 cuotas sin interés con tarjetas distintas a Galicia.
 - No aplicar la financiación manualmente desde el bot: depende del medio de pago al confirmar la compra.
 - No combinar el beneficio con cupones de descuento (ej.: ACA), que aplican solo a reservas tradicionales.

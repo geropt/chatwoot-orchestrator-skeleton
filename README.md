@@ -6,7 +6,7 @@ Harness de un agente conversacional de atención al cliente para MyKeego (carsha
 
 - Node.js + TypeScript (ESM, NodeNext)
 - Fastify 5 como servidor HTTP
-- `@anthropic-ai/sdk` para el LLM (Claude Sonnet 4.6 por default, con prompt caching)
+- `@anthropic-ai/sdk` apuntado al endpoint Anthropic-compatible de OpenRouter (modelo `moonshotai/kimi-k2.6` por default, con prompt caching)
 - `gray-matter` para parsear los skills en Markdown
 
 ## Estructura
@@ -46,7 +46,7 @@ skills/                        # Catálogo de guías (.md + index.json)
 ```bash
 npm install
 cp .env.example .env
-# completar ANTHROPIC_API_KEY, CHATWOOT_*, etc.
+# completar OPENROUTER_API_KEY, CHATWOOT_*, etc.
 npm run dev
 ```
 
@@ -68,8 +68,9 @@ curl http://localhost:4000/health
 | `CHATWOOT_WEBHOOK_SECRET` | Secret del webhook (HMAC SHA256) |
 | `CHATWOOT_SKIP_SIGNATURE_VERIFICATION` | `true` solo para desarrollo local |
 | `SKILLS_DIR` | Directorio de skills (default `./skills`) |
-| `ANTHROPIC_API_KEY` | API key de Anthropic |
-| `ANTHROPIC_MODEL` | Modelo (default `claude-sonnet-4-6`) |
+| `OPENROUTER_API_KEY` | API key de OpenRouter |
+| `OPENROUTER_MODEL` | Modelo (default `moonshotai/kimi-k2.6`) |
+| `OPENROUTER_BASE_URL` | Base URL de OpenRouter (default `https://openrouter.ai/api`; el SDK agrega `/v1/messages`) |
 | `AGENT_MAX_TURNS` | Máximo de turnos antes de handoff automático (default 8) |
 | `AGENT_MAX_RETRIES` | Reintentos ante error del LLM antes de handoff (default 2) |
 | `AGENT_MAX_TOOL_ITERATIONS` | Máximo de iteraciones tool-use por turno (default 3) |

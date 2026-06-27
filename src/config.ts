@@ -11,9 +11,10 @@ export type Config = {
     skipSignatureVerification: boolean;
   };
   skillsDir: string;
-  anthropic: {
+  openrouter: {
     apiKey: string;
     model: string;
+    baseUrl: string;
   };
   agent: {
     maxTurns: number;
@@ -132,9 +133,12 @@ export function loadConfig(): Config {
       skipSignatureVerification
     },
     skillsDir: optional("SKILLS_DIR", "./skills"),
-    anthropic: {
-      apiKey: required("ANTHROPIC_API_KEY"),
-      model: optional("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+    openrouter: {
+      apiKey: required("OPENROUTER_API_KEY"),
+      model: optional("OPENROUTER_MODEL", "moonshotai/kimi-k2.6"),
+      // El SDK de Anthropic agrega "/v1/messages" al baseURL, por eso es
+      // ".../api" y NO ".../api/v1".
+      baseUrl: optional("OPENROUTER_BASE_URL", "https://openrouter.ai/api")
     },
     agent: {
       maxTurns: asNumber("AGENT_MAX_TURNS", 8),

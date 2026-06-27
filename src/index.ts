@@ -22,13 +22,21 @@ async function main(): Promise<void> {
     config.chatwoot.apiToken
   );
 
-  const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
+  const anthropic = new Anthropic({
+    apiKey: "", // no se usa; OpenRouter autentica vía Bearer (authToken)
+    authToken: config.openrouter.apiKey,
+    baseURL: config.openrouter.baseUrl,
+    defaultHeaders: {
+      "HTTP-Referer": "https://mykeego.com",
+      "X-Title": "MyKeego Support Bot"
+    }
+  });
 
   const tools = new ToolRegistry();
   // Future tool registrations go here: tools.register({ name, description, inputSchema, handler })
 
   const agent = new Agent(anthropic, skills.getAll(), tools, {
-    model: config.anthropic.model,
+    model: config.openrouter.model,
     temperature: config.agent.temperature,
     maxTokens: config.agent.maxTokens,
     maxToolIterations: config.agent.maxToolIterations,
