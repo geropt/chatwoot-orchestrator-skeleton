@@ -6,7 +6,7 @@ Harness de un agente conversacional de atención al cliente para MyKeego (carsha
 
 - Node.js + TypeScript (ESM, NodeNext)
 - Fastify 5 como servidor HTTP
-- `@anthropic-ai/sdk` apuntado al endpoint Anthropic-compatible de OpenRouter (modelo `moonshotai/kimi-k2.6` por default, con prompt caching)
+- `@anthropic-ai/sdk` apuntado al endpoint Anthropic-compatible de OpenRouter (modelo `google/gemini-2.5-flash` por default, con prompt caching). Cambiar de modelo es solo setear `OPENROUTER_MODEL`.
 - `gray-matter` para parsear los skills en Markdown
 
 ## Estructura
@@ -69,7 +69,7 @@ curl http://localhost:4000/health
 | `CHATWOOT_SKIP_SIGNATURE_VERIFICATION` | `true` solo para desarrollo local |
 | `SKILLS_DIR` | Directorio de skills (default `./skills`) |
 | `OPENROUTER_API_KEY` | API key de OpenRouter |
-| `OPENROUTER_MODEL` | Modelo (default `moonshotai/kimi-k2.6`) |
+| `OPENROUTER_MODEL` | Modelo (default `google/gemini-2.5-flash`) |
 | `OPENROUTER_BASE_URL` | Base URL de OpenRouter (default `https://openrouter.ai/api`; el SDK agrega `/v1/messages`) |
 | `AGENT_MAX_TURNS` | Máximo de turnos antes de handoff automático (default 8) |
 | `AGENT_MAX_RETRIES` | Reintentos ante error del LLM antes de handoff (default 2) |

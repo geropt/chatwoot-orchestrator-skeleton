@@ -289,7 +289,7 @@ function offHoursMessage(hours: BusinessHoursStatus): string {
 
 function emergencyMessage(phone: string): string {
   const phonePart = phone ? ` al ${phone}` : "";
-  return `Por lo que contás puede ser una emergencia. Llamá ahora al teléfono de emergencias de MyKeego${phonePart}. Si hay riesgo para personas, contactá también a los servicios de emergencia locales.`;
+  return `Estamos fuera del horario de atención. Como necesitás asistencia inmediata, llamá ahora al teléfono de guardia de MyKeego${phonePart}.`;
 }
 
 function isIncoming(type: string | number | undefined): boolean {
