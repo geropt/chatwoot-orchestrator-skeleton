@@ -1,6 +1,6 @@
 {
-  "version": 7,
-  "generated_at": "2026-06-03T12:42:00.000Z",
+  "version": 8,
+  "generated_at": "2026-06-26T22:30:00.000Z",
   "skills": [
     {
       "id": "auto_no_abre",
@@ -151,14 +151,6 @@
       "file": "privacidad-datos-personales.md",
       "title": "Privacidad y datos personales",
       "description": "Qué datos recopila MyKeego, cómo se usan, derechos del titular y cómo ejercerlos.",
-      "category": "administrativo",
-      "enabled": true
-    },
-    {
-      "id": "promo_hot_keego_2026",
-      "file": "promo-hot-keego-2026.md",
-      "title": "Promo Hot Keego – Mayo 2026",
-      "description": "Condiciones, uso y resolución de problemas de la promoción Hot Keego (20% OFF + cuotas + cashback) vigente del 11 al 13 de mayo de 2026.",
       "category": "administrativo",
       "enabled": true
     },
